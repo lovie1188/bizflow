@@ -8,6 +8,7 @@ import {
 import Logo from '../Logo';
 import { useAuth } from '../../context/AuthContext';
 import { fetchApi } from '../../utils/api';
+import BottomNav from './BottomNav';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', path: '/admin',          icon: <LayoutDashboard size={18} /> },
@@ -158,6 +159,8 @@ const AdminLayout = () => {
           <Outlet />
         </div>
       </div>
+
+      <BottomNav />
     </div>
   );
 };

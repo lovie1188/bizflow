@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Filter, ShoppingCart, Info, X } from 'lucide-react';
 import { fetchApi, API_URL } from '../../utils/api';
 import { useCart } from '../../context/CartContext';
@@ -108,25 +109,28 @@ const ProductCatalog = () => {
         ) : (
           <div className="product-grid">
             {products.map((p) => (
-              <div key={p.id} className="glass-panel product-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div className="product-card-image" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', height: '160px' }}>
+              <div key={p.id} className="glass-panel product-card depth-3d-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Link to={`/shop/product/${p.id}`} className="product-card-image" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', height: '160px', textDecoration: 'none' }}>
                   {p.image_url ? (
                     <img src={`${API_URL}${p.image_url}`} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>[No Image]</span>
-                  )}
+                  )
+                  }
                   {p.category && (
                     <span style={{ position: 'absolute', top: '8px', left: '8px', background: 'var(--color-accent)', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
                       {p.category}
                     </span>
                   )}
-                </div>
+                </Link>
                 <div className="product-card-content" style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <span style={{ fontSize: '12px', color: 'var(--color-secondary)', fontWeight: 500 }}>SKU: {p.sku}</span>
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }} title="HSN Code"><Info size={12}/> {p.hsn_code}</span>
                   </div>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{p.name}</h3>
+                  <Link to={`/shop/product/${p.id}`} style={{ textDecoration: 'none', color: 'var(--text-main)' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{p.name}</h3>
+                  </Link>
                   
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '16px', marginTop: 'auto' }}>
                     <div>
@@ -137,7 +141,7 @@ const ProductCatalog = () => {
 
                   <button 
                     onClick={() => addToCart({ id: p.id, name: p.name, price: Number(p.trade_price), gstRate: Number(p.gst_rate), unit: p.unit, img: p.image_url ? `${API_URL}${p.image_url}` : null })}
-                    className="btn-primary" 
+                    className="btn-primary depth-3d-btn" 
                     style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '12px', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
                   >
                     <ShoppingCart size={16} /> Add to Cart

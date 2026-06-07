@@ -14,9 +14,27 @@ const BuyerProfile = () => {
 
   useEffect(() => {
     if (!isLoggedIn) { navigate('/login'); return; }
+    
+    // Initial data from local storage
     const userStr = localStorage.getItem('bizflow_user');
+    let buyerId = null;
     if (userStr) {
-      try { setProfile(JSON.parse(userStr)); } catch (e) {}
+      try { 
+        const u = JSON.parse(userStr);
+        setProfile(u); 
+        buyerId = u.buyerEntityId;
+      } catch (e) {}
+    }
+
+    // Fetch fresh data from DB
+    if (buyerId) {
+      fetchApi(`/buyers/${buyerId}`)
+        .then(data => {
+          if (data) {
+            setProfile(prev => ({ ...prev, ...data }));
+          }
+        })
+        .catch(err => console.error('Error fetching buyer profile:', err));
     }
   }, [isLoggedIn, navigate]);
 

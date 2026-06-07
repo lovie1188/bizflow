@@ -4,6 +4,8 @@ import { ShoppingCart, Search, User, Menu, X, Package, FileText, LogOut, LayoutD
 import Logo from '../Logo';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import BottomNav from './BottomNav';
+import ToastContainer from '../ui/Toast';
 
 const ShopLayout = () => {
   const { cartItems } = useCart();
@@ -15,6 +17,7 @@ const ShopLayout = () => {
 
   return (
     <div className="shop-layout">
+      <ToastContainer />
 
       {/* ── Top Navbar ── */}
       <nav className="shop-navbar glass-panel">
@@ -49,13 +52,40 @@ const ShopLayout = () => {
             </Link>
 
             {isLoggedIn ? (
-              <div className="hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Link to={homeRoute} style={{ color: 'var(--text-main)', fontSize: '13px', fontWeight: 500 }}>
-                  {user?.name || 'Dashboard'}
-                </Link>
-                <button onClick={logout} className="btn-secondary" style={{ padding: '5px 12px', fontSize: '12px' }}>
-                  Logout
+              <div className="hide-mobile" style={{ position: 'relative' }}>
+                <button 
+                  onClick={() => setMenuOpen(o => !o)} 
+                  className="btn-secondary" 
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px' }}
+                >
+                  <User size={16} /> 
+                  <span style={{ fontSize: '13px', fontWeight: 500 }}>{user?.name || 'Account'}</span>
                 </button>
+
+                {menuOpen && (
+                  <div className="glass-panel" style={{ 
+                    position: 'absolute', top: 'calc(100% + 8px)', right: 0, 
+                    width: '200px', padding: '8px 0', 
+                    boxShadow: 'var(--shadow-md)', zIndex: 100 
+                  }}>
+                    <Link to={homeRoute} className="dropdown-item" onClick={() => setMenuOpen(false)}>
+                      <LayoutDashboard size={16} /> Dashboard
+                    </Link>
+                    <Link to="/shop/orders" className="dropdown-item" onClick={() => setMenuOpen(false)}>
+                      <FileText size={16} /> My Orders
+                    </Link>
+                    <Link to="/shop/invoices" className="dropdown-item" onClick={() => setMenuOpen(false)}>
+                      <FileText size={16} /> My Invoices
+                    </Link>
+                    <Link to="/shop/profile" className="dropdown-item" onClick={() => setMenuOpen(false)}>
+                      <User size={16} /> Profile
+                    </Link>
+                    <div style={{ height: '1px', background: 'var(--glass-border)', margin: '4px 0' }} />
+                    <button onClick={() => { logout(); setMenuOpen(false); }} className="dropdown-item" style={{ width: '100%', color: 'var(--color-danger)' }}>
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <Link to="/login" className="btn-primary hide-mobile" style={{ padding: '7px 14px', fontSize: '13px' }}>
@@ -138,25 +168,7 @@ const ShopLayout = () => {
       </footer>
 
       {/* ── Mobile Bottom Nav ── */}
-      <nav className="mobile-bottom-nav">
-        <Link to="/shop/catalog" className={`mobile-nav-item ${isActive('/shop/catalog') || isActive('/shop') ? 'active' : ''}`}>
-          <Package size={22} />
-          <span>Catalog</span>
-        </Link>
-        <Link to="/shop/cart" className={`mobile-nav-item ${isActive('/shop/cart') ? 'active' : ''}`} style={{ position: 'relative' }}>
-          <ShoppingCart size={22} />
-          {cartItems.length > 0 && <span className="mobile-nav-badge">{cartItems.length}</span>}
-          <span>Cart</span>
-        </Link>
-        <Link to="/shop/orders" className={`mobile-nav-item ${isActive('/shop/orders') ? 'active' : ''}`}>
-          <FileText size={22} />
-          <span>Orders</span>
-        </Link>
-        <Link to="/shop/profile" className={`mobile-nav-item ${isActive('/shop/profile') ? 'active' : ''}`}>
-          <User size={22} />
-          <span>Profile</span>
-        </Link>
-      </nav>
+      <BottomNav />
 
     </div>
   );

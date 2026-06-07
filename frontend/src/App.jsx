@@ -8,6 +8,7 @@ import AdminLayout from './components/layouts/AdminLayout';
 // Shop Pages
 import ShopHome      from './pages/shop/ShopHome';
 import ProductCatalog from './pages/shop/ProductCatalog';
+import ProductDetail  from './pages/shop/ProductDetail';
 import Cart          from './pages/shop/Cart';
 import Checkout      from './pages/shop/Checkout';
 import Login         from './pages/shop/Login';
@@ -50,6 +51,7 @@ function App() {
           <Route path="/shop" element={<ShopLayout />}>
             <Route index          element={<ProductCatalog />} />
             <Route path="catalog" element={<ProductCatalog />} />
+            <Route path="product/:id" element={<ProductDetail />} />
             <Route path="cart"    element={<Cart />} />
             <Route path="checkout" element={<Checkout />} />
             <Route path="login"    element={<Login />} />

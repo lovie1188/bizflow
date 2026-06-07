@@ -21,15 +21,7 @@ router.get('/settings', verifyToken, requireRole('admin'), async (req, res) => {
   }
 });
 
-// GET BANKS
-router.get('/banks', verifyToken, requireRole('admin'), async (req, res) => {
-  try {
-    // Return empty array for now since banks table is not implemented yet
-    res.json([]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 router.put('/settings', verifyToken, requireRole('admin'), async (req, res) => {
   const { 
     name, gstin, udyam_no, phone, email, address, city, state, pincode, invoice_prefix,

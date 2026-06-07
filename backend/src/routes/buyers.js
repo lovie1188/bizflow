@@ -35,6 +35,17 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
   }
 });
 
+// GET SINGLE BUYER
+router.get('/:id', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM buyers WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Buyer not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GENERATE AGREEMENT PDF
 router.get('/:id/generate-agreement', verifyToken, async (req, res) => {
   try {

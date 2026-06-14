@@ -50,7 +50,7 @@ const Cart = () => {
                 <div>
                   <h3 style={{ fontSize: '16px', marginBottom: '4px' }}>{item.name}</h3>
                   <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                    ₹{item.price.toFixed(2)} / {item.unit} &middot; <span style={{ color: item.gstRate === 0 ? '#10B981' : 'inherit' }}>{item.gstRate}% GST</span>
+                    ₹{Number(item.price || 0).toFixed(2)} / {item.unit} &middot; <span style={{ color: item.gstRate === 0 ? '#10B981' : 'inherit' }}>{item.gstRate}% GST</span>
                   </div>
                 </div>
               </div>

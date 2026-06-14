@@ -48,7 +48,11 @@ const AdminDashboard = () => {
           <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>Dashboard Overview</h1>
           <p style={{ color: 'var(--text-muted)' }}>Welcome back, here's what's happening with your wholesale business today.</p>
         </div>
-        <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button 
+          onClick={() => window.location.href = '/shop/catalog'}
+          className="btn-primary depth-3d-btn" 
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', border: 'none' }}
+        >
           <ShoppingBag size={18} /> New Order
         </button>
       </div>

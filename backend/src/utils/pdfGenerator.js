@@ -2,7 +2,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-const docsDir = path.join(__dirname, '../../../uploads/docs');
+const docsDir = path.join(__dirname, '../../uploads/docs');
 if (!fs.existsSync(docsDir)) {
   fs.mkdirSync(docsDir, { recursive: true });
 }

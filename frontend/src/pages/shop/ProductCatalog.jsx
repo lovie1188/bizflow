@@ -9,6 +9,8 @@ const ProductCatalog = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [qtys, setQtys] = useState({}); // { [productId]: quantity }
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -93,11 +95,31 @@ const ProductCatalog = () => {
         </div>
       </aside>
 
-      {/* Main Grid */}
+      {/* Main Grid / List Container */}
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '24px' }}>Wholesale Catalog</h2>
-          <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Showing {products.length} products</span>
+          <div>
+            <h2 style={{ fontSize: '24px', margin: 0 }}>Wholesale Catalog</h2>
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Showing {products.length} products</span>
+          </div>
+          
+          {/* List / Grid Toggle Layout Buttons */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button 
+              onClick={() => setViewMode('grid')}
+              className={viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}
+              style={{ padding: '6px 12px', fontSize: '12px', borderRadius: 'var(--radius-sm)' }}
+            >
+              Grid View
+            </button>
+            <button 
+              onClick={() => setViewMode('list')}
+              className={viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}
+              style={{ padding: '6px 12px', fontSize: '12px', borderRadius: 'var(--radius-sm)' }}
+            >
+              List View
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -107,48 +129,118 @@ const ProductCatalog = () => {
         ) : products.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No products found.</div>
         ) : (
-          <div className="product-grid">
-            {products.map((p) => (
-              <div key={p.id} className="glass-panel product-card depth-3d-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <Link to={`/shop/product/${p.id}`} className="product-card-image" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', height: '160px', textDecoration: 'none' }}>
-                  {p.image_url ? (
-                    <img src={`${API_URL}${p.image_url}`} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>[No Image]</span>
-                  )
-                  }
-                  {p.category && (
-                    <span style={{ position: 'absolute', top: '8px', left: '8px', background: 'var(--color-accent)', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                      {p.category}
-                    </span>
-                  )}
-                </Link>
-                <div className="product-card-content" style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--color-secondary)', fontWeight: 500 }}>SKU: {p.sku}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }} title="HSN Code"><Info size={12}/> {p.hsn_code}</span>
-                  </div>
-                  <Link to={`/shop/product/${p.id}`} style={{ textDecoration: 'none', color: 'var(--text-main)' }}>
-                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{p.name}</h3>
-                  </Link>
-                  
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '16px', marginTop: 'auto' }}>
-                    <div>
-                      <div className="price-text" style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-primary)' }}>₹{p.trade_price}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>per {p.unit} &middot; {p.gst_rate > 0 ? `+${p.gst_rate}% GST` : 'GST Exempt'}</div>
+          <div className={viewMode === 'grid' ? 'product-grid' : 'product-list'}>
+            {products.map((p) => {
+              const currentQty = qtys[p.id] || p.min_order_qty || 1;
+              const handleQtyChange = (val) => {
+                const min = p.min_order_qty || 1;
+                setQtys(prev => ({ ...prev, [p.id]: Math.max(min, val) }));
+              };
+
+              if (viewMode === 'list') {
+                return (
+                  <div key={p.id} className="glass-panel product-list-card depth-3d-card">
+                    <Link to={`/shop/product/${p.id}`} className="product-card-image" style={{ background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                      {p.image_url ? (
+                        <img src={`${API_URL}${p.image_url}`} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>[No Image]</span>
+                      )}
+                      {p.category && (
+                        <span style={{ position: 'absolute', top: '8px', left: '8px', background: 'var(--color-accent)', color: 'white', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                          {p.category}
+                        </span>
+                      )}
+                    </Link>
+
+                    <div className="product-card-content">
+                      <div className="product-info-block">
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--color-secondary)', fontWeight: 500 }}>SKU: {p.sku}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>HSN: {p.hsn_code}</span>
+                        </div>
+                        <Link to={`/shop/product/${p.id}`} style={{ textDecoration: 'none', color: 'var(--text-main)' }}>
+                          <h3 style={{ margin: 0, fontSize: '16px' }}>{p.name}</h3>
+                        </Link>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>MOQ: {p.min_order_qty || 1} &middot; Stock: {p.stock > 0 ? p.stock : 'None'}</span>
+                      </div>
+
+                      <div className="product-price-block">
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>₹{p.trade_price}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>per {p.unit} &middot; {p.gst_rate > 0 ? `+${p.gst_rate}% GST` : 'GST Exempt'}</div>
+                      </div>
+
+                      <div className="product-action-block">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-input)', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
+                          <button onClick={() => handleQtyChange(currentQty - 1)} style={{ background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', width: '20px', fontWeight: 'bold' }}>-</button>
+                          <span style={{ minWidth: '24px', textAlign: 'center', fontWeight: 'bold' }}>{currentQty}</span>
+                          <button onClick={() => handleQtyChange(currentQty + 1)} style={{ background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', width: '20px', fontWeight: 'bold' }}>+</button>
+                        </div>
+
+                        <button 
+                          onClick={() => addToCart({ id: p.id, name: p.name, price: Number(p.trade_price), gstRate: Number(p.gst_rate), unit: p.unit, img: p.image_url ? `${API_URL}${p.image_url}` : null }, currentQty)}
+                          className="btn-primary depth-3d-btn" 
+                          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '8px 16px', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                        >
+                          <ShoppingCart size={14} /> Add
+                        </button>
+                      </div>
                     </div>
                   </div>
+                );
+              }
 
-                  <button 
-                    onClick={() => addToCart({ id: p.id, name: p.name, price: Number(p.trade_price), gstRate: Number(p.gst_rate), unit: p.unit, img: p.image_url ? `${API_URL}${p.image_url}` : null })}
-                    className="btn-primary depth-3d-btn" 
-                    style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '12px', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-                  >
-                    <ShoppingCart size={16} /> Add to Cart
-                  </button>
+              // Grid View Layout (Default)
+              return (
+                <div key={p.id} className="glass-panel product-card depth-3d-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <Link to={`/shop/product/${p.id}`} className="product-card-image" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', height: '160px', textDecoration: 'none' }}>
+                    {p.image_url ? (
+                      <img src={`${API_URL}${p.image_url}`} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>[No Image]</span>
+                    )}
+                    {p.category && (
+                      <span style={{ position: 'absolute', top: '8px', left: '8px', background: 'var(--color-accent)', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                        {p.category}
+                      </span>
+                    )}
+                  </Link>
+                  <div className="product-card-content" style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--color-secondary)', fontWeight: 500 }}>SKU: {p.sku}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }} title="HSN Code"><Info size={12}/> {p.hsn_code}</span>
+                    </div>
+                    <Link to={`/shop/product/${p.id}`} style={{ textDecoration: 'none', color: 'var(--text-main)' }}>
+                      <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{p.name}</h3>
+                    </Link>
+                    
+                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '16px', marginTop: 'auto' }}>
+                      <div>
+                        <div className="price-text" style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-primary)' }}>₹{p.trade_price}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>per {p.unit} &middot; {p.gst_rate > 0 ? `+${p.gst_rate}% GST` : 'GST Exempt'}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: 'auto' }}>
+                      {/* Quantity Selector inside grid view card */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-input)', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', flex: 1, justifyContent: 'space-between' }}>
+                        <button onClick={() => handleQtyChange(currentQty - 1)} style={{ background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
+                        <span style={{ fontWeight: 'bold' }}>{currentQty}</span>
+                        <button onClick={() => handleQtyChange(currentQty + 1)} style={{ background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
+                      </div>
+
+                      <button 
+                        onClick={() => addToCart({ id: p.id, name: p.name, price: Number(p.trade_price), gstRate: Number(p.gst_rate), unit: p.unit, img: p.image_url ? `${API_URL}${p.image_url}` : null }, currentQty)}
+                        className="btn-primary depth-3d-btn" 
+                        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '10px 12px', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                      >
+                        <ShoppingCart size={15} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

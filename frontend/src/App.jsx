@@ -49,7 +49,7 @@ function App() {
 
           {/* ─── Buyer Storefront ─── */}
           <Route path="/shop" element={<ShopLayout />}>
-            <Route index          element={<ProductCatalog />} />
+            <Route index          element={<ShopHome />} />
             <Route path="catalog" element={<ProductCatalog />} />
             <Route path="product/:id" element={<ProductDetail />} />
             <Route path="cart"    element={<Cart />} />

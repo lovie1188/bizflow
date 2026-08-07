@@ -2,6 +2,19 @@
 .env
 .env.*
 !.env.example
+!.env.development.local.example
+
+# ─── Credentials & Private Keys (NEVER commit) ─────────────────
+google-service-account.json
+**/google-service-account.json
+*-service-account.json
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.jks
 
 # ─── Dependencies ───────────────────────────────────────────────
 node_modules/
@@ -24,6 +37,18 @@ npm-debug.log*
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# ─── Backups (contain DB dumps with sensitive data) ─────────────
+backend/backups/
+*.sql
+*.dump
+
+# ─── Archives (bloat repo, may contain secrets) ─────────────────
+*.zip
+*.tar.gz
+*.tar
+*.rar
+*.7z
+
 # ─── OS & Editor ────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
@@ -32,3 +57,4 @@ Thumbs.db
 
 # ─── Lock files (optional: remove if you want to commit these) ──
 # package-lock.json
+

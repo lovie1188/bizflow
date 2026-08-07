@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const pool = require('../utils/db');
 const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -9,7 +9,13 @@ const Razorpay = require('razorpay');
 router.post('/create-order', verifyToken, async (req, res) => {
   const { invoiceId } = req.body;
   try {
-    const invoiceRes = await pool.query('SELECT amount, grand_total FROM invoices WHERE id = $1', [invoiceId]);
+    const isAdmin = ['admin', 'supplier'].includes(req.role);
+    const invoiceQuery = isAdmin
+      ? 'SELECT amount, grand_total, company_id FROM invoices WHERE id = $1 AND company_id = $2'
+      : 'SELECT amount, grand_total, company_id FROM invoices WHERE id = $1 AND buyer_entity_id = $2';
+    const invoiceParams = isAdmin ? [invoiceId, req.companyId] : [invoiceId, req.buyerEntityId];
+
+    const invoiceRes = await pool.query(invoiceQuery, invoiceParams);
     if (invoiceRes.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
     
     const amount = parseFloat(invoiceRes.rows[0].grand_total || invoiceRes.rows[0].amount || 0) * 100; // in paise
@@ -24,7 +30,8 @@ router.post('/create-order', verifyToken, async (req, res) => {
       currency: "INR",
       receipt: `receipt_inv_${invoiceId}`,
       notes: {
-        invoice_id: invoiceId
+        invoice_id: String(invoiceId),
+        company_id: String(invoiceRes.rows[0].company_id)
       }
     };
 
@@ -76,12 +83,39 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
   }
 
   const invoiceId = payload.payment.entity.notes.invoice_id;
+  const capturedPaise = payload.payment.entity.amount;
+
   try {
-    const invRes = await pool.query('UPDATE invoices SET paid = true WHERE id = $1 RETURNING buyer_entity_id, grand_total, amount', [invoiceId]);
+    // Check invoice exists and is unpaid
+    const checkRes = await pool.query(
+      'SELECT id, amount, grand_total, paid, buyer_entity_id FROM invoices WHERE id = $1',
+      [invoiceId]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const inv = checkRes.rows[0];
+    if (inv.paid) {
+      return res.json({ status: 'already_paid' });
+    }
+
+    const expectedPaise = Math.round(parseFloat(inv.grand_total || inv.amount || 0) * 100);
+    if (capturedPaise < expectedPaise) {
+      console.error(`[Webhook] Insufficient payment amount for invoice ${invoiceId}: captured ${capturedPaise}, expected ${expectedPaise}`);
+      return res.status(400).json({ error: 'Payment amount mismatch' });
+    }
+
+    const invRes = await pool.query(
+      'UPDATE invoices SET paid = true WHERE id = $1 AND paid = false RETURNING buyer_entity_id, grand_total, amount',
+      [invoiceId]
+    );
+
     if (invRes.rows.length > 0) {
-      const inv = invRes.rows[0];
-      const paidAmount = parseFloat(inv.grand_total || inv.amount || 0);
-      await pool.query('UPDATE buyers SET used_credit = GREATEST(used_credit - $1, 0) WHERE id = $2', [paidAmount, inv.buyer_entity_id]);
+      const paidInv = invRes.rows[0];
+      const paidAmount = parseFloat(paidInv.grand_total || paidInv.amount || 0);
+      await pool.query('UPDATE buyers SET used_credit = GREATEST(used_credit - $1, 0) WHERE id = $2', [paidAmount, paidInv.buyer_entity_id]);
     }
     res.json({ status: 'success' });
   } catch (err) {

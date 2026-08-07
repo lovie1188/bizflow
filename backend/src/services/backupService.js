@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { google } = require('googleapis');
@@ -76,10 +76,10 @@ async function performBackup() {
 
   // Need PGPASSWORD to avoid password prompt
   const env = { ...process.env, PGPASSWORD: dbPass };
-  const cmd = `pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -F p -c -f "${filePath}" ${dbName}`;
+  const args = ['-h', dbHost, '-p', String(dbPort), '-U', dbUser, '-F', 'p', '-c', '-f', filePath, dbName];
 
   return new Promise((resolve, reject) => {
-    exec(cmd, { env }, async (error, stdout, stderr) => {
+    execFile('pg_dump', args, { env }, async (error, stdout, stderr) => {
       if (error) {
         console.error('Backup failed:', error.message);
         return reject(error);
@@ -91,8 +91,6 @@ async function performBackup() {
 
       // Clean up local files older than 15 days
       cleanupLocalBackups(15);
-      
-      // Optionally clean up Google Drive old backups (omitted for brevity, can be added later)
       
       resolve(filePath);
     });
@@ -122,15 +120,11 @@ async function performRestore(filePath) {
     throw new Error('Backup file not found locally.');
   }
   
-  // Note: restoring using psql. Restoring to an existing DB might fail if tables exist, 
-  // so typically this involves dropping tables first or creating a new DB. 
-  // For safety, this runs it directly, assuming the file has drops or we drop manually.
-  
   const env = { ...process.env, PGPASSWORD: dbPass };
-  const cmd = `psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -f "${filePath}"`;
+  const args = ['-h', dbHost, '-p', String(dbPort), '-U', dbUser, '-d', dbName, '-f', filePath];
 
   return new Promise((resolve, reject) => {
-    exec(cmd, { env }, (error, stdout, stderr) => {
+    execFile('psql', args, { env }, (error, stdout, stderr) => {
       if (error) {
         console.error('Restore failed:', error.message);
         return reject(error);

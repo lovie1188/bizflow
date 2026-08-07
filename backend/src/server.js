@@ -41,9 +41,21 @@ const app = express();
 // ============================================================
 // MIDDLEWARE
 // ============================================================
-app.use(helmet({ 
+app.use(helmet({
   crossOriginResourcePolicy: false,
-  contentSecurityPolicy: false 
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https://api.razorpay.com", process.env.CORS_ORIGIN || "*"],
+      frameSrc: ["'self'", "https://api.razorpay.com"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+    }
+  }
 }));
 if (process.env.NODE_ENV === 'production') {
   app.use(morgan('combined'));

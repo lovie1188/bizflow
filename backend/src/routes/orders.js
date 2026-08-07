@@ -241,20 +241,19 @@ router.get('/:id/po', verifyToken, async (req, res) => {
 
 // ─────────────────────────────────────────────
 // GET INVOICE HTML (printable — admin & buyer)
-// Placeholder — will be built after PO is confirmed
 // ─────────────────────────────────────────────
 router.get('/:id/invoice-html', verifyToken, async (req, res) => {
   try {
     const invRes = await pool.query('SELECT id FROM invoices WHERE order_id = $1', [req.params.id]);
     if (invRes.rows.length === 0) return res.status(404).send('Invoice not generated for this order yet.');
-    res.redirect(`/api/invoices/${invRes.rows[0].id}/pdf?token=${req.query.token || req.headers.authorization?.split(' ')[1] || ''}`);
+    res.redirect(`/api/invoices/${invRes.rows[0].id}/pdf`);
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
 
 router.get('/:id/invoice', verifyToken, async (req, res) => {
-  res.redirect(`/api/orders/${req.params.id}/invoice-html?token=${req.query.token || req.headers.authorization?.split(' ')[1] || ''}`);
+  res.redirect(`/api/orders/${req.params.id}/invoice-html`);
 });
 
 // ─────────────────────────────────────────────

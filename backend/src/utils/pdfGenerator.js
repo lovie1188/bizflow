@@ -3,6 +3,8 @@
 // Returns a URL path string (stored in po_url / invoice_url).
 // The actual HTML is rendered on-demand via GET /:id/po-html and GET /:id/invoice-html routes.
 
+const { escapeHtml } = require('./sanitize');
+
 /**
  * generatePO
  * Called during order creation. Stores the URL path in the DB.
@@ -39,8 +41,8 @@ function renderPOHtml({ order, buyer, supplier, items }) {
   const itemRows = items.map((item, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td>${item.name || '—'}</td>
-      <td class="center">${item.hsn_code || item.hsnCode || '—'}</td>
+      <td>${escapeHtml(item.name || '—')}</td>
+      <td class="center">${escapeHtml(item.hsn_code || item.hsnCode || '—')}</td>
       <td class="center">${Number(item.qty).toFixed(2)}</td>
       <td class="right">₹${formatCurrency(item.unit_price || item.unitPrice)}</td>
       <td class="center">${item.gst_rate || item.gstRate || 0}%</td>
@@ -385,13 +387,13 @@ function renderPOHtml({ order, buyer, supplier, items }) {
     <!-- HEADER -->
     <div class="header">
       <div class="header-left">
-        <h1>${supplier.name || 'Charu Marketing'}</h1>
-        <p>${supplier.address || ''}, ${supplier.city || ''}, ${supplier.state || ''}</p>
-        <p>GSTIN: ${supplier.gstin || '—'} &nbsp;|&nbsp; Ph: ${supplier.phone || '—'}</p>
+        <h1>${escapeHtml(supplier.name || 'Charu Marketing')}</h1>
+        <p>${escapeHtml(supplier.address || '')}, ${escapeHtml(supplier.city || '')}, ${escapeHtml(supplier.state || '')}</p>
+        <p>GSTIN: ${escapeHtml(supplier.gstin || '—')} &nbsp;|&nbsp; Ph: ${escapeHtml(supplier.phone || '—')}</p>
         <span class="msme-badge">MSME Compliant Purchase Order</span>
       </div>
       <div class="header-right">
-        <div class="po-number">PO: ${order.order_number}</div>
+        <div class="po-number">PO: ${escapeHtml(order.order_number)}</div>
         <div class="po-date">Date: ${formatDate(order.created_at)}</div>
         ${order.due_date ? `<div class="po-date">Due: ${formatDate(order.due_date)}</div>` : ''}
       </div>
@@ -405,42 +407,42 @@ function renderPOHtml({ order, buyer, supplier, items }) {
           <h3>Buyer Details</h3>
           <div class="field">
             <div class="label">Name</div>
-            <div class="value">${buyer.name || '—'}</div>
+            <div class="value">${escapeHtml(buyer.name || '—')}</div>
           </div>
           <div class="field">
             <div class="label">GSTIN</div>
-            <div class="value small">${buyer.gstin || 'Not Provided'}</div>
+            <div class="value small">${escapeHtml(buyer.gstin || 'Not Provided')}</div>
           </div>
           <div class="field">
             <div class="label">Address</div>
-            <div class="value small">${buyer.address || '—'}, ${buyer.city || ''} ${buyer.pincode || ''}</div>
+            <div class="value small">${escapeHtml(buyer.address || '—')}, ${escapeHtml(buyer.city || '')} ${escapeHtml(buyer.pincode || '')}</div>
           </div>
           <div class="field">
             <div class="label">Contact</div>
-            <div class="value small">${buyer.phone || '—'} ${buyer.email ? '| ' + buyer.email : ''}</div>
+            <div class="value small">${escapeHtml(buyer.phone || '—')} ${buyer.email ? '| ' + escapeHtml(buyer.email) : ''}</div>
           </div>
-          ${buyer.msme_no ? `<div class="field"><div class="label">MSME / Udyam No.</div><div class="value small">${buyer.msme_no}</div></div>` : ''}
+          ${buyer.msme_no ? `<div class="field"><div class="label">MSME / Udyam No.</div><div class="value small">${escapeHtml(buyer.msme_no)}</div></div>` : ''}
         </div>
 
         <div class="party-card">
           <h3>Supplier (MSME) Details</h3>
           <div class="field">
             <div class="label">Name</div>
-            <div class="value">${supplier.name || '—'}</div>
+            <div class="value">${escapeHtml(supplier.name || '—')}</div>
           </div>
           <div class="field">
             <div class="label">GSTIN</div>
-            <div class="value small">${supplier.gstin || '—'}</div>
+            <div class="value small">${escapeHtml(supplier.gstin || '—')}</div>
           </div>
           <div class="field">
             <div class="label">Address</div>
-            <div class="value small">${supplier.address || '—'}, ${supplier.city || ''}, ${supplier.state || ''}</div>
+            <div class="value small">${escapeHtml(supplier.address || '—')}, ${escapeHtml(supplier.city || '')}, ${escapeHtml(supplier.state || '')}</div>
           </div>
           <div class="field">
             <div class="label">Contact</div>
-            <div class="value small">${supplier.phone || '—'}</div>
+            <div class="value small">${escapeHtml(supplier.phone || '—')}</div>
           </div>
-          ${supplier.udyam_no ? `<div class="field"><div class="label">Udyam No.</div><div class="value small">${supplier.udyam_no}</div></div>` : ''}
+          ${supplier.udyam_no ? `<div class="field"><div class="label">Udyam No.</div><div class="value small">${escapeHtml(supplier.udyam_no)}</div></div>` : ''}
         </div>
       </div>
 
@@ -448,11 +450,11 @@ function renderPOHtml({ order, buyer, supplier, items }) {
       <div class="terms-row" style="margin-bottom:24px;">
         <div class="term-box">
           <div class="label">Delivery Address</div>
-          <div class="value" style="font-size:12px;font-weight:400;">${order.delivery_address || buyer.address || '—'}</div>
+          <div class="value" style="font-size:12px;font-weight:400;">${escapeHtml(order.delivery_address || buyer.address || '—')}</div>
         </div>
         <div class="term-box">
           <div class="label">Payment Terms</div>
-          <div class="value">${supplier.default_payment_terms || 'As per MSME Act'}</div>
+          <div class="value">${escapeHtml(supplier.default_payment_terms || 'As per MSME Act')}</div>
         </div>
         <div class="term-box">
           <div class="label">Delivery Date</div>
@@ -520,7 +522,7 @@ function renderPOHtml({ order, buyer, supplier, items }) {
         </div>
         <div class="clause">
           <div class="clause-title">Payment Terms</div>
-          <p>Payment within ${supplier.default_payment_terms || '15 days'}. Delay interest as per MSME Act 2006 (3x RBI rate).</p>
+          <p>Payment within ${escapeHtml(supplier.default_payment_terms || '15 days')}. Delay interest as per MSME Act 2006 (3x RBI rate).</p>
         </div>
         <div class="clause">
           <div class="clause-title">Dispute Resolution</div>
@@ -531,20 +533,20 @@ function renderPOHtml({ order, buyer, supplier, items }) {
       ${order.notes ? `
       <div style="margin-bottom:20px; padding:12px 14px; background:#fffbea; border-left:3px solid #f0b429; border-radius:0 4px 4px 0;">
         <div style="font-size:11px;font-weight:700;color:#b7791f;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">Notes</div>
-        <p style="font-size:12px;color:#444;">${order.notes}</p>
+        <p style="font-size:12px;color:#444;">${escapeHtml(order.notes)}</p>
       </div>` : ''}
 
       <!-- SIGNATURES -->
       <div class="signatures">
         <div class="sig-box">
           <div class="sig-label">Buyer Signature & Stamp</div>
-          ${order.tc_signature ? `<div class="digital-sig">✓ Digitally signed: "${order.tc_signature}"</div>` : ''}
-          <div class="sig-name">${buyer.name || '—'}</div>
+          ${order.tc_signature ? `<div class="digital-sig">✓ Digitally signed: "${escapeHtml(order.tc_signature)}"</div>` : ''}
+          <div class="sig-name">${escapeHtml(buyer.name || '—')}</div>
           <div class="sig-sub">${formatDate(order.tc_accepted_at || order.created_at)}</div>
         </div>
         <div class="sig-box">
           <div class="sig-label">Supplier Signature & Stamp</div>
-          <div class="sig-name">${supplier.name || '—'}</div>
+          <div class="sig-name">${escapeHtml(supplier.name || '—')}</div>
           <div class="sig-sub">Authorised Signatory</div>
         </div>
       </div>

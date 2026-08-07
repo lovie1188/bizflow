@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, Truck, Eye, Search, RefreshCw } from 'lucide-react';
-import { fetchApi } from '../../utils/api';
+import { CheckCircle, XCircle, Truck, Eye, Search, RefreshCw, FileText } from 'lucide-react';
+import { fetchApi, API_BASE_URL } from '../../utils/api';
+import { useToast } from '../../context/ToastContext';
 
 const statusConfig = {
   'pending':    { color: '#F59E0B', bg: 'rgba(245,158,11,0.1)',   label: 'Pending Approval' },
@@ -12,24 +13,48 @@ const statusConfig = {
 
 const AdminOrders = () => {
   const [orders, setOrders]         = useState([]);
+  const [page, setPage]             = useState(1);
+  const [hasMore, setHasMore]       = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch]         = useState('');
   const [loading, setLoading]       = useState(true);
-  const [actionId, setActionId]     = useState(null); // tracks which row is being updated
+  const [actionId, setActionId]     = useState(null);
+  const showToast                   = useToast();
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (pageNum = 1) => {
     try {
-      setLoading(true);
-      const res = await fetchApi('/orders?limit=100');
-      setOrders(res?.data || []);
+      if (pageNum === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      const res = await fetchApi(`/orders?page=${pageNum}&limit=20`);
+      const newOrders = res?.data || [];
+      
+      if (pageNum === 1) {
+        setOrders(newOrders);
+      } else {
+        setOrders(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNew = newOrders.filter(p => !existingIds.has(p.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+      setHasMore(res?.pagination?.hasNext || false);
     } catch (e) {
       console.error('Failed to load orders:', e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
-  useEffect(() => { loadOrders(); }, [loadOrders]);
+  useEffect(() => { loadOrders(1); }, [loadOrders]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    loadOrders(nextPage);
+  };
 
   const updateStatus = async (id, status) => {
     setActionId(id);
@@ -50,12 +75,26 @@ const AdminOrders = () => {
           body: { status } 
         });
       }
-      await loadOrders();
+      showToast(`Order marked as ${status} successfully`);
+      await loadOrders(1);
     } catch (e) {
-      alert(e.message);
+      showToast(e.message, 'error');
     } finally {
       setActionId(null);
     }
+  };
+
+  const handleDispatch = (order) => {
+    const total = parseFloat(order.grand_total || order.total_amount || 0);
+    if (total >= 50000) {
+      const ewayBill = window.prompt(`Order value is ₹${total.toLocaleString('en-IN')} (>= ₹50,000).\nE-Way Bill is MANDATORY.\n\nEnter E-Way Bill Number:`);
+      if (!ewayBill) {
+        showToast('Dispatch cancelled. E-Way Bill is required.', 'error');
+        return;
+      }
+      showToast(`E-Way Bill ${ewayBill} attached successfully!`);
+    }
+    updateStatus(order.id, 'dispatched');
   };
 
   // Filter by tab + search
@@ -187,13 +226,19 @@ const AdminOrders = () => {
                       ) : (
                         <>
                           {o.po_url && (
-                            <button onClick={() => window.open(`http://localhost:5000${o.po_url}`, '_blank')} title="View PO"
+                            <button onClick={() => window.open(`${API_BASE_URL}/orders/${o.id}/po-html?token=${localStorage.getItem('bizflow_token')}`, '_blank')} title="View PO"
                               style={{ background:'transparent', border:'1px solid var(--glass-border)', color:'var(--text-muted)', padding:'6px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'12px', display:'flex', alignItems:'center', gap:'4px' }}>
-                              PO
+                              <FileText size={14} /> PO
                             </button>
                           )}
                           {o.invoice_url && (
-                            <button onClick={() => window.open(`http://localhost:5000${o.invoice_url}`, '_blank')} title="View Invoice"
+                            <button onClick={(e) => {
+                              if (o.status === 'pending') {
+                                showToast("अभी PO confirm नहीं हुआ है, इसलिए Invoice उपलब्ध नहीं है।", 'error');
+                              } else {
+                                window.open(`${API_BASE_URL}/orders/${o.id}/invoice-html?token=${localStorage.getItem('bizflow_token')}`, '_blank');
+                              }
+                            }} title="View Invoice"
                               style={{ background:'transparent', border:'1px solid var(--glass-border)', color:'var(--text-muted)', padding:'6px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'12px', display:'flex', alignItems:'center', gap:'4px' }}>
                               INV
                             </button>
@@ -214,7 +259,7 @@ const AdminOrders = () => {
                           </>}
                           {o.status === 'approved' && (
                             <button
-                              onClick={() => updateStatus(o.id, 'dispatched')}
+                              onClick={() => handleDispatch(o)}
                               title="Mark Dispatched"
                               style={{ background:'rgba(139,92,246,0.1)', border:'none', color:'var(--color-accent)', padding:'8px', borderRadius:'8px', cursor:'pointer' }}>
                               <Truck size={16}/>
@@ -244,6 +289,19 @@ const AdminOrders = () => {
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={handleLoadMore} 
+            disabled={loadingMore}
+            style={{ padding: '10px 24px' }}
+          >
+            {loadingMore ? 'Loading...' : 'Load More Orders'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

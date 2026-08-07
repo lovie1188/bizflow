@@ -22,7 +22,7 @@ const Cart = () => {
   }
 
   return (
-    <div className="container" style={{ padding: '40px 24px' }}>
+    <div className="container-fluid" style={{ padding: '40px 24px' }}>
       <h1 style={{ fontSize: '32px', marginBottom: '32px' }}>Shopping Cart</h1>
 
       <div className="cart-layout" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '32px', alignItems: 'start' }}>
@@ -40,15 +40,19 @@ const Cart = () => {
           {cartItems.map(item => (
             <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                {item.img ? (
-                  <img src={item.img} alt={item.name} style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
-                ) : (
-                  <div style={{ width: '60px', height: '60px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ShoppingCart size={20} color="var(--text-muted)" />
-                  </div>
-                )}
+                <Link to={`/shop/product/${item.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {item.img ? (
+                    <img src={item.img} alt={item.name} style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '60px', height: '60px', borderRadius: '8px', background: 'var(--bg-alt)', border: '1px solid var(--border-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ShoppingCart size={20} color="var(--text-muted)" />
+                    </div>
+                  )}
+                </Link>
                 <div>
-                  <h3 style={{ fontSize: '16px', marginBottom: '4px' }}>{item.name}</h3>
+                  <Link to={`/shop/product/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <h3 style={{ fontSize: '16px', marginBottom: '4px' }}>{item.name}</h3>
+                  </Link>
                   <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                     ₹{Number(item.price || 0).toFixed(2)} / {item.unit} &middot; <span style={{ color: item.gstRate === 0 ? '#10B981' : 'inherit' }}>{item.gstRate}% GST</span>
                   </div>
@@ -57,9 +61,9 @@ const Cart = () => {
 
               <div style={{ display: 'flex', gap: '64px', alignItems: 'center', width: '350px', justifyContent: 'flex-end' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button onClick={() => updateQuantity(item.id, item.qty - 1)} style={{ width: '30px', height: '30px', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'transparent', color: 'white', cursor: 'pointer' }}>-</button>
-                  <span style={{ width: '30px', textAlign: 'center' }}>{item.qty}</span>
-                  <button onClick={() => updateQuantity(item.id, item.qty + 1)} style={{ width: '30px', height: '30px', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'transparent', color: 'white', cursor: 'pointer' }}>+</button>
+                  <button onClick={() => updateQuantity(item.id, item.qty - 1)} style={{ width: '30px', height: '30px', borderRadius: '4px', border: '1px solid var(--border-base)', background: 'var(--bg-alt)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
+                  <span style={{ width: '30px', textAlign: 'center', fontWeight: 'bold' }}>{item.qty}</span>
+                  <button onClick={() => updateQuantity(item.id, item.qty + 1)} style={{ width: '30px', height: '30px', borderRadius: '4px', border: '1px solid var(--border-base)', background: 'var(--bg-alt)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px', width: '120px', justifyContent: 'flex-end' }}>
                   <div style={{ fontWeight: 600, fontSize: '16px' }}>₹{(item.price * item.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</div>

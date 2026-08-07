@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building, FileText, Calendar, MapPin, UploadCloud, CheckCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { fetchApi } from '../../utils/api';
+import { fetchApi, API_BASE_URL } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
 const BuyerProfile = () => {
@@ -11,31 +11,42 @@ const BuyerProfile = () => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
+  
+  const [addressData, setAddressData] = useState({ address: '', city: '', state: '', pincode: '' });
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressMsg, setAddressMsg] = useState('');
 
   useEffect(() => {
     if (!isLoggedIn) { navigate('/login'); return; }
     
     // Initial data from local storage
     const userStr = localStorage.getItem('bizflow_user');
-    let buyerId = null;
     if (userStr) {
       try { 
         const u = JSON.parse(userStr);
         setProfile(u); 
-        buyerId = u.buyerEntityId;
       } catch (e) {}
     }
 
     // Fetch fresh data from DB
-    if (buyerId) {
-      fetchApi(`/buyers/${buyerId}`)
-        .then(data => {
-          if (data) {
-            setProfile(prev => ({ ...prev, ...data }));
+    fetchApi(`/buyers/me`)
+      .then(data => {
+        if (data) {
+          setProfile(prev => ({ ...prev, ...data }));
+          if (data.address) {
+            setAddressData({
+              address: data.address || '',
+              city: data.city || '',
+              state: data.state || '',
+              pincode: data.pincode || ''
+            });
           }
-        })
-        .catch(err => console.error('Error fetching buyer profile:', err));
-    }
+        }
+      })
+      .catch(err => {
+        // Profile not found is non-critical; user can still see basic info
+        console.warn('Buyer profile not yet linked:', err.message);
+      });
   }, [isLoggedIn, navigate]);
 
   const handleFileChange = (e) => {
@@ -59,7 +70,7 @@ const BuyerProfile = () => {
       const formData = new FormData();
       formData.append('agreementFile', file);
 
-      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/buyers/${buyerEntityId}/agreement`, {
+      const res = await fetch(`${API_BASE_URL}/buyers/${buyerEntityId}/agreement`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -80,14 +91,33 @@ const BuyerProfile = () => {
     }
   };
 
+  const handleSaveAddress = async () => {
+    if (!profile?.id) return;
+    setSavingAddress(true);
+    setAddressMsg('');
+    try {
+      const updated = await fetchApi(`/buyers/${profile.id}`, {
+        method: 'PUT',
+        body: addressData
+      });
+      setProfile(prev => ({ ...prev, ...updated }));
+      setAddressMsg('Address updated successfully!');
+    } catch (err) {
+      setAddressMsg('Error: ' + err.message);
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
   return (
-    <div className="container" style={{ padding: '40px 24px' }}>
+    <div className="container-fluid" style={{ padding: '40px 24px' }}>
       <div style={{ display: 'flex', gap: '32px' }}>
         
         {/* Sidebar Nav */}
         <aside style={{ width: '250px' }}>
           <div className="glass-panel" style={{ padding: '16px 0', display: 'flex', flexDirection: 'column' }}>
             <Link to="/shop/orders" style={{ padding: '12px 24px', color: 'var(--text-main)', borderRight: '2px solid transparent' }}>My Orders</Link>
+            <Link to="/shop/purchase-orders" style={{ padding: '12px 24px', color: 'var(--text-main)', borderRight: '2px solid transparent' }}>Purchase Orders</Link>
             <Link to="/shop/invoices" style={{ padding: '12px 24px', color: 'var(--text-main)', borderRight: '2px solid transparent' }}>My Invoices</Link>
             <Link to="/shop/profile" style={{ padding: '12px 24px', background: 'rgba(59,130,246,0.1)', color: 'var(--color-primary)', borderRight: '2px solid var(--color-primary)', fontWeight: 500 }}>Business Profile</Link>
           </div>
@@ -129,6 +159,62 @@ const BuyerProfile = () => {
                 <input readOnly value={profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : ''} style={{ width: '100%', padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'var(--text-muted)', fontFamily: 'inherit', outline: 'none' }} />
               </div>
             </div>
+          </div>
+
+          <div className="glass-panel" style={{ padding: '32px', maxWidth: '700px', marginBottom: '32px' }}>
+            <h2 style={{ fontSize: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MapPin size={20} color="var(--color-primary)" /> Delivery Address
+            </h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Street Address</label>
+                <textarea 
+                  value={addressData.address} 
+                  onChange={(e) => setAddressData({...addressData, address: e.target.value})}
+                  rows={3}
+                  style={{ width: '100%', padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-input)', color: 'var(--text-main)', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }} 
+                />
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>City</label>
+                  <input 
+                    value={addressData.city} 
+                    onChange={(e) => setAddressData({...addressData, city: e.target.value})}
+                    style={{ width: '100%', padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-input)', color: 'var(--text-main)', fontFamily: 'inherit', outline: 'none' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>State</label>
+                  <input 
+                    value={addressData.state} 
+                    onChange={(e) => setAddressData({...addressData, state: e.target.value})}
+                    style={{ width: '100%', padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-input)', color: 'var(--text-main)', fontFamily: 'inherit', outline: 'none' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Pincode</label>
+                  <input 
+                    value={addressData.pincode} 
+                    onChange={(e) => setAddressData({...addressData, pincode: e.target.value})}
+                    style={{ width: '100%', padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-input)', color: 'var(--text-main)', fontFamily: 'inherit', outline: 'none' }} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button className="btn-primary" onClick={handleSaveAddress} disabled={savingAddress}>
+              {savingAddress ? 'Saving...' : 'Save Address'}
+            </button>
+
+            {addressMsg && (
+              <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: addressMsg.includes('Error') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: addressMsg.includes('Error') ? '#EF4444' : '#10B981', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                {!addressMsg.includes('Error') && <CheckCircle size={16} />}
+                {addressMsg}
+              </div>
+            )}
           </div>
 
           <div className="glass-panel" style={{ padding: '32px', maxWidth: '700px' }}>

@@ -35,11 +35,11 @@ const CheckoutTerms = ({ isOpen, onClose, onAccept }) => {
           <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)', marginBottom: '24px' }}>
             <p>Please review and accept the B2B terms of service before placing your order. This acts as a digital agreement.</p>
             
-            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginTop: '16px' }}>
-              <h4 style={{ color: 'white', marginBottom: '8px' }}>1. Payment & MSME Compliance</h4>
+            <div style={{ background: 'var(--bg-input)', padding: '16px', borderRadius: '8px', border: '1px solid var(--glass-border)', marginTop: '16px' }}>
+              <h4 style={{ color: 'var(--text-main)', marginBottom: '8px' }}>1. Payment & MSME Compliance</h4>
               <p>Payment is strictly due within 15 days of invoice date. Late payments will incur interest as per MSME guidelines.</p>
               
-              <h4 style={{ color: 'white', marginTop: '16px', marginBottom: '8px' }}>2. Return & Replacement Policy</h4>
+              <h4 style={{ color: 'var(--text-main)', marginTop: '16px', marginBottom: '8px' }}>2. Return & Replacement Policy</h4>
               <ul style={{ paddingLeft: '20px' }}>
                 <li>Returns or replacements of goods will <strong>only be allowed within 24 hours</strong> of delivery.</li>
                 <li>Complaints regarding <strong>expired or damaged goods</strong> must be registered within <strong>12 hours</strong> of delivery.</li>
@@ -59,8 +59,8 @@ const CheckoutTerms = ({ isOpen, onClose, onAccept }) => {
               placeholder="e.g. John Doe"
               style={{
                 width: '100%', padding: '12px', borderRadius: '8px',
-                background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)',
-                color: 'white', fontSize: '16px'
+                background: 'var(--bg-input)', border: '1px solid var(--glass-border)',
+                color: 'var(--text-main)', fontSize: '16px', outline: 'none'
               }}
             />
           </div>
@@ -68,7 +68,7 @@ const CheckoutTerms = ({ isOpen, onClose, onAccept }) => {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
             <button 
               onClick={onClose}
-              style={{ padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', color: 'white', cursor: 'pointer' }}
+              style={{ padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer' }}
             >
               Cancel
             </button>

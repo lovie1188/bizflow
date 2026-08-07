@@ -108,6 +108,14 @@ docker-compose up -d
 
 Follow the **[COMPLETE LAUNCH GUIDE](BIZFLOW_LAUNCH_GUIDE.md)** for step-by-step instructions.
 
+### Option 4: Production Deployment Checklist
+
+To fully finalize production readiness before launching, remember to:
+- **Set `NODE_ENV=production`** in your `.env` on your hosting server.
+- **Set a strong `JWT_SECRET`** string.
+- **Set `CORS_ORIGIN=https://your-frontend-domain.com`** in the backend `.env`.
+- **Change `REACT_APP_API_BASE`** (or `REACT_APP_API_URL`) in the frontend's environment variables to point to your live backend domain during the build step.
+
 ---
 
 ## 📁 Project Structure

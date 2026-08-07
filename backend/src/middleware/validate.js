@@ -34,12 +34,15 @@ const orderSchema = Joi.object({
       qty: Joi.number().positive().required(),
       unitPrice: Joi.number().positive().required(),
       gstRate: Joi.number().valid(0, 5, 12, 18, 28).required(),
-      hsnCode: Joi.string().allow('', null)
+      hsnCode: Joi.string().allow('', null),
+      name: Joi.string().allow('', null)
     })
   ).min(1).required(),
   dueDate: Joi.date().iso().required(),
   deliveryAddress: Joi.string().allow('', null),
-  notes: Joi.string().allow('', null)
+  notes: Joi.string().allow('', null),
+  tcSignature: Joi.string().min(3).required(),
+  saveAddressToProfile: Joi.boolean().allow(null)
 });
 
 const invoiceSchema = Joi.object({

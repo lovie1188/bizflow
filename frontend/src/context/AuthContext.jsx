@@ -11,9 +11,10 @@ export const useAuth = () => useContext(AuthContext);
 export const ROLE_HOME = {
   admin:     '/admin',
   supplier:  '/admin',
-  buyer:     '/shop',
+  buyer:     '/shop/catalog',
   delivery:  '/delivery',
-  developer: '/dev',
+  staff:     '/delivery',
+  developer: '/developer',
 };
 
 export const AuthProvider = ({ children }) => {

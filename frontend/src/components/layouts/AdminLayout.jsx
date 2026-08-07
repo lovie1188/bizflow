@@ -43,7 +43,9 @@ const AdminLayout = () => {
     if (!isLoggedIn || !isSupplier) return;
     fetchApi('/companies/settings')
       .then(data => { if (data?.name) updateCompany(data); })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to fetch company settings:", err.message);
+      });
   }, [isLoggedIn, isSupplier]);
 
   // Responsive resize
@@ -136,9 +138,17 @@ const AdminLayout = () => {
           </div>
 
           <div className="admin-header-right">
-            <Link to="/shop" className="hide-mobile" style={{ color: 'var(--color-secondary)', fontSize: '13px', fontWeight: 500 }}>
-              View Storefront
-            </Link>
+            {company && (
+              <a
+                href={company.custom_domain ? `http://${company.custom_domain}` : `/store/${encodeURIComponent(company.name)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="hide-mobile"
+                style={{ color: 'var(--color-secondary)', fontSize: '13px', fontWeight: 500, textDecoration: 'none' }}
+              >
+                View Storefront
+              </a>
+            )}
 
             <button className="btn-icon" style={{ position: 'relative' }} aria-label="Notifications">
               <Bell size={18} />

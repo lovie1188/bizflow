@@ -1,9 +1,44 @@
-const express = require('express');
+﻿const express = require('express');
+const pool = require('../utils/db');
 const router = express.Router();
-const { Pool } = require('pg');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const Razorpay = require('razorpay');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// CREATE RAZORPAY ORDER
+router.post('/create-order', verifyToken, async (req, res) => {
+  const { invoiceId } = req.body;
+  try {
+    const invoiceRes = await pool.query('SELECT amount, grand_total FROM invoices WHERE id = $1', [invoiceId]);
+    if (invoiceRes.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    
+    const amount = parseFloat(invoiceRes.rows[0].grand_total || invoiceRes.rows[0].amount || 0) * 100; // in paise
+
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY,
+      key_secret: process.env.RAZORPAY_SECRET
+    });
+
+    const options = {
+      amount: Math.round(amount),
+      currency: "INR",
+      receipt: `receipt_inv_${invoiceId}`,
+      notes: {
+        invoice_id: invoiceId
+      }
+    };
+
+    const order = await razorpay.orders.create(options);
+    res.json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key: process.env.RAZORPAY_KEY
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // PAYMENT WEBHOOK (Razorpay)
 router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
@@ -16,17 +51,42 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
     .update(body)
     .digest('hex');
 
-  if (signature === expectedSignature) {
-    const { payload } = JSON.parse(body);
-    const invoiceId = payload.payment.entity.notes.invoice_id;
-    try {
-      await pool.query('UPDATE invoices SET paid = true WHERE id = $1', [invoiceId]);
-      res.json({ status: 'success' });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+  if (signature !== expectedSignature) {
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid JSON body' });
+  }
+
+  const { event, payload } = parsed;
+
+  // Only process actual captured payments — ignore all other event types
+  if (event !== 'payment.captured') {
+    return res.json({ status: 'ignored', event });
+  }
+
+  // Guard against malformed payload shapes
+  if (!payload?.payment?.entity?.notes?.invoice_id) {
+    console.error('[Webhook] Missing invoice_id in payload notes:', JSON.stringify(payload));
+    return res.status(400).json({ error: 'Missing invoice_id in payload' });
+  }
+
+  const invoiceId = payload.payment.entity.notes.invoice_id;
+  try {
+    const invRes = await pool.query('UPDATE invoices SET paid = true WHERE id = $1 RETURNING buyer_entity_id, grand_total, amount', [invoiceId]);
+    if (invRes.rows.length > 0) {
+      const inv = invRes.rows[0];
+      const paidAmount = parseFloat(inv.grand_total || inv.amount || 0);
+      await pool.query('UPDATE buyers SET used_credit = GREATEST(used_credit - $1, 0) WHERE id = $2', [paidAmount, inv.buyer_entity_id]);
     }
-  } else {
-    res.status(400).json({ error: 'Invalid signature' });
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('[Webhook] DB error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -76,8 +136,11 @@ router.post('/record', verifyToken, requireRole('admin'), async (req, res) => {
       [req.companyId, invoiceId, amount, paymentMethod || 'cash', transactionId || null]
     );
 
-    // Auto-mark invoice as paid
-    await pool.query('UPDATE invoices SET paid = true WHERE id = $1', [invoiceId]);
+    // Auto-mark invoice as paid and release credit limit
+    const invRes = await pool.query('UPDATE invoices SET paid = true WHERE id = $1 RETURNING buyer_entity_id', [invoiceId]);
+    if (invRes.rows.length > 0) {
+      await pool.query('UPDATE buyers SET used_credit = GREATEST(used_credit - $1, 0) WHERE id = $2', [amount, invRes.rows[0].buyer_entity_id]);
+    }
 
     res.status(201).json(result.rows[0]);
   } catch (err) {

@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, UserPlus, Phone, Building2, Search, RefreshCw, FileText } from 'lucide-react';
-import { fetchApi } from '../../utils/api';
+import { fetchApi, API_BASE_URL } from '../../utils/api';
+import { useToast } from '../../context/ToastContext';
 
 const AdminBuyers = () => {
   const [buyers, setBuyers]         = useState([]);
+  const [page, setPage]             = useState(1);
+  const [hasMore, setHasMore]       = useState(false);
+  const [loadingMore, setLoadingMore]= useState(false);
   const [activeTab, setActiveTab]   = useState('all');
   const [search, setSearch]         = useState('');
   const [loading, setLoading]       = useState(true);
   const [actionId, setActionId]     = useState(null);
+  const showToast = useToast();
+
+  // Add new buyer state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newBuyer, setNewBuyer] = useState({ name:'', email:'', phone:'', gstin:'', businessType:'Retail' });
 
   // Approval modal state
   const [showModal, setShowModal]     = useState(false);
@@ -20,19 +29,39 @@ const AdminBuyers = () => {
   const [editCreditBuyer, setEditCreditBuyer] = useState(null);
   const [newCreditLimit, setNewCreditLimit] = useState('');
 
-  const loadBuyers = useCallback(async () => {
+  const loadBuyers = useCallback(async (pageNum = 1) => {
     try {
-      setLoading(true);
-      const res = await fetchApi('/buyers');
-      setBuyers(Array.isArray(res) ? res : (res?.data || []));
+      if (pageNum === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      const res = await fetchApi(`/buyers?page=${pageNum}&limit=20`);
+      const newBuyers = res?.data || [];
+      
+      if (pageNum === 1) {
+        setBuyers(newBuyers);
+      } else {
+        setBuyers(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNew = newBuyers.filter(p => !existingIds.has(p.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+      setHasMore(res?.pagination?.hasNext || false);
     } catch (e) {
-      console.error('Failed to load buyers:', e);
+      showToast(e.message, 'error');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, []);
+  }, [showToast]);
 
-  useEffect(() => { loadBuyers(); }, [loadBuyers]);
+  useEffect(() => { loadBuyers(1); }, [loadBuyers]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    loadBuyers(nextPage);
+  };
 
   const filtered = buyers
     .filter(b => activeTab === 'all' || b.status === activeTab)
@@ -66,8 +95,9 @@ const AdminBuyers = () => {
         method: 'PUT',
         body: { status: 'rejected' }
       });
+      showToast('Buyer rejected successfully');
       await loadBuyers();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast(e.message, 'error'); }
     finally { setActionId(null); }
   };
 
@@ -79,9 +109,9 @@ const AdminBuyers = () => {
         // Upload agreement file first
         const fd = new FormData();
         fd.append('agreement', agreementFile);
-        await fetch(`http://localhost:5000/api/buyers/${selectedBuyer.id}/agreement`, {
+        await fetch(`${API_BASE_URL}/buyers/${selectedBuyer.id}/agreement`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          headers: { Authorization: `Bearer ${localStorage.getItem('bizflow_token')}` },
           body: fd
         });
       }
@@ -93,26 +123,28 @@ const AdminBuyers = () => {
       });
 
       setShowModal(false);
+      showToast('Buyer approved successfully');
       await loadBuyers();
     } catch (e) {
-      alert(e.message);
+      showToast(e.message, 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const handleEditCreditSave = async () => {
-    if (!newCreditLimit || isNaN(newCreditLimit)) return alert('Enter a valid amount');
+    if (!newCreditLimit || isNaN(newCreditLimit)) return showToast('Enter a valid amount', 'error');
     setSaving(true);
     try {
       await fetchApi(`/buyers/${editCreditBuyer.id}/credit`, {
         method: 'PUT',
         body: { creditLimit: Number(newCreditLimit) }
       });
+      showToast('Credit limit updated');
       setEditCreditBuyer(null);
       await loadBuyers();
     } catch (e) {
-      alert(e.message);
+      showToast(e.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -121,11 +153,27 @@ const AdminBuyers = () => {
   const tabStyle = (active) => ({
     padding: '8px 18px', borderRadius: '20px', fontFamily: 'inherit',
     fontWeight: 500, fontSize: '13px', cursor: 'pointer',
-    background: active ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'rgba(255,255,255,0.05)',
+    background: active ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'var(--bg-white)',
     color: active ? 'white' : 'var(--text-muted)',
-    border: active ? 'none' : '1px solid var(--glass-border)',
+    border: active ? 'none' : '1px solid var(--border-base)',
     display: 'flex', alignItems: 'center', gap: '6px'
   });
+
+  const handleAddBuyer = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await fetchApi('/buyers', { method: 'POST', body: newBuyer });
+      showToast('Buyer added successfully!');
+      setShowAddModal(false);
+      setNewBuyer({ name:'', email:'', phone:'', gstin:'', businessType:'Retail' });
+      loadBuyers(1);
+    } catch(err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div>
@@ -136,10 +184,10 @@ const AdminBuyers = () => {
           <p style={{ color:'var(--text-muted)' }}>Approve registrations, set credit limits, manage agreements.</p>
         </div>
         <div style={{ display:'flex', gap:'10px' }}>
-          <button onClick={loadBuyers} className="btn-secondary" style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'14px' }}>
+          <button onClick={() => loadBuyers(1)} className="btn-secondary" style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'14px' }}>
             <RefreshCw size={16}/> Refresh
           </button>
-          <button className="btn-primary" style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+          <button onClick={() => setShowAddModal(true)} className="btn-primary" style={{ display:'flex', alignItems:'center', gap:'8px' }}>
             <UserPlus size={18}/> Add Buyer
           </button>
         </div>
@@ -164,7 +212,7 @@ const AdminBuyers = () => {
         <Search size={18} style={{ position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }}/>
         <input type="text" placeholder="Search by name, GSTIN or phone…"
           value={search} onChange={e => setSearch(e.target.value)}
-          style={{ width:'100%', padding:'11px 16px 11px 44px', borderRadius:'var(--radius-md)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+          style={{ width:'100%', padding:'11px 16px 11px 44px', borderRadius:'var(--radius-md)', border:'1px solid var(--glass-border)', background:'var(--bg-white)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
       </div>
 
       {/* Buyer Cards */}
@@ -223,7 +271,7 @@ const AdminBuyers = () => {
                           </span>
                         : <span style={{ color:'var(--color-danger)' }}>No Agreement</span>
                     }
-                    <button onClick={() => window.open(`http://localhost:5000/api/buyers/${b.id}/generate-agreement?token=${localStorage.getItem('bizflow_token')}`, '_blank')}
+                    <button onClick={() => window.open(`${API_BASE_URL}/buyers/${b.id}/generate-agreement?token=${localStorage.getItem('bizflow_token')}`, '_blank')}
                       style={{ marginLeft:'auto', padding:'4px 8px', borderRadius:'4px', background:'rgba(255,255,255,0.1)', color:'white', fontSize:'11px', cursor:'pointer' }}>
                       Download PDF
                     </button>
@@ -271,6 +319,19 @@ const AdminBuyers = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={handleLoadMore} 
+            disabled={loadingMore}
+            style={{ padding: '10px 24px' }}
+          >
+            {loadingMore ? 'Loading...' : 'Load More Buyers'}
+          </button>
         </div>
       )}
 
@@ -336,7 +397,7 @@ const AdminBuyers = () => {
             </label>
             
             <div style={{ display:'flex', gap:'12px', marginTop:'24px' }}>
-              <button onClick={() => setEditCreditBuyer(null)} disabled={saving} style={{ flex:1, padding:'10px', borderRadius:'8px', background:'rgba(255,255,255,0.05)', color:'var(--text-muted)', border:'1px solid var(--glass-border)', cursor:'pointer' }}>
+              <button onClick={() => setEditCreditBuyer(null)} disabled={saving} style={{ flex:1, padding:'10px', borderRadius:'8px', background:'var(--bg-white)', color:'var(--text-muted)', border:'1px solid var(--border-base)', cursor:'pointer' }}>
                 Cancel
               </button>
               <button onClick={handleEditCreditSave} disabled={saving} style={{ flex:1, padding:'10px', borderRadius:'8px', background:'var(--color-primary)', color:'white', border:'none', cursor:'pointer', fontWeight:500 }}>
@@ -346,6 +407,45 @@ const AdminBuyers = () => {
           </div>
         </div>
       )}
+
+      {/* Add Buyer Modal */}
+      {showAddModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px' }}>
+              <h2 style={{ fontSize:'20px' }}>Add New Buyer</h2>
+              <button className="btn-icon" onClick={() => setShowAddModal(false)}><XCircle size={20}/></button>
+            </div>
+            <form onSubmit={handleAddBuyer}>
+              <div style={{ marginBottom:'16px' }}>
+                <label style={{ display:'block', marginBottom:'8px', fontSize:'13px', color:'var(--text-muted)' }}>Business Name *</label>
+                <input required type="text" className="input-field" value={newBuyer.name} onChange={e => setNewBuyer({...newBuyer, name:e.target.value})} placeholder="e.g. Acme Corp" />
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', marginBottom:'16px' }}>
+                <div>
+                  <label style={{ display:'block', marginBottom:'8px', fontSize:'13px', color:'var(--text-muted)' }}>Phone *</label>
+                  <input required type="text" className="input-field" value={newBuyer.phone} onChange={e => setNewBuyer({...newBuyer, phone:e.target.value})} placeholder="10-digit number" />
+                </div>
+                <div>
+                  <label style={{ display:'block', marginBottom:'8px', fontSize:'13px', color:'var(--text-muted)' }}>GSTIN (Optional)</label>
+                  <input type="text" className="input-field" value={newBuyer.gstin} onChange={e => setNewBuyer({...newBuyer, gstin:e.target.value})} placeholder="27XXXXX1234X1Z5" />
+                </div>
+              </div>
+              <div style={{ marginBottom:'24px' }}>
+                <label style={{ display:'block', marginBottom:'8px', fontSize:'13px', color:'var(--text-muted)' }}>Email (Optional)</label>
+                <input type="email" className="input-field" value={newBuyer.email} onChange={e => setNewBuyer({...newBuyer, email:e.target.value})} placeholder="buyer@example.com" />
+              </div>
+              <div style={{ display:'flex', justifyContent:'flex-end', gap:'12px' }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                  {saving ? 'Adding...' : 'Add Buyer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

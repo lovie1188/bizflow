@@ -46,12 +46,7 @@ const DeliveryDashboard = () => {
         body: JSON.stringify({ delivery_status: status, tracking_note: note })
       });
 
-      if (status === 'dispatched' || status === 'delivered') {
-        await fetchApi(`/orders/${id}/status`, {
-          method: 'PUT',
-          body: JSON.stringify({ status })
-        });
-      }
+
       await loadOrders();
     } catch (e) {
       setError(e.message);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Edit, Info, ShieldCheck, Truck } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Edit, Info, ShieldCheck, Truck, Package } from 'lucide-react';
 import { fetchApi, API_URL } from '../../utils/api';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -26,9 +26,7 @@ const ProductDetail = () => {
   const fetchProduct = async () => {
     try {
       setLoading(true);
-      const res = await fetchApi(`/products`); // Assuming no single product API, filtering from list
-      const allProducts = res.data || [];
-      const found = allProducts.find(p => p.id === parseInt(id));
+      const found = await fetchApi(`/products/${id}`);
       
       if (!found) {
         setError('Product not found');
@@ -69,7 +67,7 @@ const ProductDetail = () => {
 
   if (loading) return <Loader center />;
   if (error || !product) return (
-    <div className="container" style={{ padding: 'var(--sp-4)' }}>
+    <div className="container-fluid" style={{ padding: 'var(--sp-4)' }}>
       <button onClick={() => navigate(-1)} className="btn-secondary" style={{ marginBottom: 'var(--sp-4)' }}>
         <ArrowLeft size={16} /> Back
       </button>
@@ -94,7 +92,7 @@ const ProductDetail = () => {
         </div>
       </div>
 
-      <div className="container" style={{ maxWidth: '800px', paddingBottom: '32px' }}>
+      <div className="container-fluid" style={{ maxWidth: '800px', paddingBottom: '32px' }}>
         <div className="detail-grid">
           
           {/* Image Gallery Area */}

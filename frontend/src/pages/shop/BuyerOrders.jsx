@@ -1,20 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Truck, CheckCircle } from 'lucide-react';
+import { Package, Truck, CheckCircle, FileText, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { fetchApi } from '../../utils/api';
+import { fetchApi, API_BASE_URL } from '../../utils/api';
+import { useToast } from '../../context/ToastContext';
 
 const BuyerOrders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showToast = useToast();
 
-  useEffect(() => {
-    fetchApi('/orders')
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadOrders = (pageNum = 1) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+
+    fetchApi(`/orders?page=${pageNum}&limit=20`)
       .then(res => {
-        setOrders(res.data || []);
+        const newOrders = res?.data || [];
+        if (pageNum === 1) {
+          setOrders(newOrders);
+        } else {
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = newOrders.filter(p => !existingIds.has(p.id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        setHasMore(res?.pagination?.hasNext || false);
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        setLoading(false);
+        setLoadingMore(false);
+      });
+  };
+
+  useEffect(() => { loadOrders(1); }, []);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    loadOrders(nextPage);
+  };
 
   const getStatusIcon = (status) => {
     if (status === 'delivered') return <CheckCircle size={28} />;
@@ -29,13 +59,14 @@ const BuyerOrders = () => {
   };
 
   return (
-    <div className="container" style={{ padding: '40px 24px' }}>
+    <div className="container-fluid" style={{ padding: '40px 24px' }}>
       <div style={{ display: 'flex', gap: '32px' }}>
         
         {/* Sidebar Nav */}
         <aside style={{ width: '250px' }}>
           <div className="glass-panel" style={{ padding: '16px 0', display: 'flex', flexDirection: 'column' }}>
             <Link to="/shop/orders" style={{ padding: '12px 24px', background: 'rgba(59,130,246,0.1)', color: 'var(--color-primary)', borderRight: '2px solid var(--color-primary)', fontWeight: 500 }}>My Orders</Link>
+            <Link to="/shop/purchase-orders" style={{ padding: '12px 24px', color: 'var(--text-main)', borderRight: '2px solid transparent' }}>Purchase Orders</Link>
             <Link to="/shop/invoices" style={{ padding: '12px 24px', color: 'var(--text-main)', borderRight: '2px solid transparent' }}>My Invoices</Link>
             <Link to="/shop/profile" style={{ padding: '12px 24px', color: 'var(--text-main)', borderRight: '2px solid transparent' }}>Business Profile</Link>
           </div>
@@ -67,12 +98,39 @@ const BuyerOrders = () => {
 
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '20px', fontWeight: 600, marginBottom: '12px' }}>₹{Number(o.grand_total).toLocaleString('en-IN')}</div>
-                    <Link to={`/shop/orders/${o.id}`} state={{ order: o }}>
-                      <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }}>View Details</button>
-                    </Link>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      <Link to={`/shop/orders/${o.id}`} state={{ order: o }}>
+                        <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }}>View Details</button>
+                      </Link>
+                      {o.po_url && (
+                        <button onClick={() => window.open(`${API_BASE_URL}/orders/${o.id}/po-html?token=${localStorage.getItem('bizflow_token')}`, '_blank')} title="View PO"
+                          style={{ background:'transparent', border:'1px solid var(--glass-border)', color:'var(--text-muted)', padding:'6px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'12px', display:'flex', alignItems:'center', gap:'4px' }}>
+                          PO
+                        </button>
+                      )}
+                      {o.status !== 'pending' && o.status !== 'rejected' && (
+                        <button onClick={() => window.open(`${API_BASE_URL}/orders/${o.id}/invoice-html?token=${localStorage.getItem('bizflow_token')}`, '_blank')} title="View Invoice"
+                          style={{ background:'transparent', border:'1px solid var(--glass-border)', color:'var(--text-muted)', padding:'6px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'12px', display:'flex', alignItems:'center', gap:'4px' }}>
+                          Invoice
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {hasMore && (
+            <div style={{ textAlign: 'center', marginTop: '24px' }}>
+              <button 
+                className="btn-secondary" 
+                onClick={handleLoadMore} 
+                disabled={loadingMore}
+                style={{ padding: '10px 24px' }}
+              >
+                {loadingMore ? 'Loading...' : 'Load More Orders'}
+              </button>
             </div>
           )}
         </div>

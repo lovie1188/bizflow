@@ -9,6 +9,7 @@ const verifyToken = (req, res, next) => {
     req.userId = decoded.userId;
     req.role = decoded.role;
     req.companyId = decoded.companyId;
+    req.buyerEntityId = decoded.buyerEntityId;
     next();
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });

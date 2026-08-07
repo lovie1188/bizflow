@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { IndianRupee, TrendingUp, AlertCircle, ShoppingBag, ArrowUpRight } from 'lucide-react';
+import { IndianRupee, TrendingUp, AlertCircle, ShoppingBag, ArrowUpRight, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { fetchApi } from '../../utils/api';
 import AdminStaff from './AdminStaff';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState({
     orders: [],
     invoices: [],
@@ -49,7 +51,7 @@ const AdminDashboard = () => {
           <p style={{ color: 'var(--text-muted)' }}>Welcome back, here's what's happening with your wholesale business today.</p>
         </div>
         <button 
-          onClick={() => window.location.href = '/shop/catalog'}
+          onClick={() => navigate('/admin/orders')}
           className="btn-primary depth-3d-btn" 
           style={{ display: 'flex', alignItems: 'center', gap: '8px', border: 'none' }}
         >
@@ -157,7 +159,13 @@ const AdminDashboard = () => {
             </div>
           </div>
           
-          <button className="btn-secondary" style={{ width: '100%', marginTop: '24px', fontSize: '14px' }}>View Aging Report</button>
+          <button 
+            className="btn-secondary" 
+            onClick={() => navigate('/admin/invoices')}
+            style={{ width: '100%', marginTop: '24px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            <FileText size={15} /> View Aging Report
+          </button>
         </div>
       </div>
     </div>

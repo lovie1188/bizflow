@@ -1,9 +1,8 @@
-const express = require('express');
+﻿const express = require('express');
+const pool = require('../utils/db');
 const router = express.Router();
-const { Pool } = require('pg');
 const { verifyToken } = require('../middleware/auth');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // GET DASHBOARD DATA
 router.get('/', verifyToken, async (req, res) => {

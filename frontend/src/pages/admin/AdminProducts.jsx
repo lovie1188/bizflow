@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, X, Upload, Package } from 'lucide-react';
 import { fetchApi, API_URL } from '../../utils/api';
+import { useToast } from '../../context/ToastContext';
 
-const EMPTY_FORM = { name:'', sku:'', hsn:'', gstRate:'18', price:'', moq:'1', unit:'PCS', stock:'', category:'Ice Cream', description:'' };
+const EMPTY_FORM = { name:'', sku:'', hsn:'', gstRate:'18', price:'', moq:'1', unit:'PCS', stock:'', category:'Ice Cream', brand:'', description:'' };
 
 const CATEGORIES = ['Ice Cream','Frozen','Dairy','Condiments','Bakery','Other'];
 const UNITS      = ['PCS','KG','KGS','BAG','PKT','LTR','BOX'];
@@ -18,14 +19,20 @@ const AdminProducts = () => {
   const [imgPreview, setImgPreview] = useState(null);
   const [imgFile, setImgFile] = useState(null);
   const [loading, setLoading]     = useState(false);
+  const [page, setPage]           = useState(1);
+  const [hasMore, setHasMore]     = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [fetching, setFetching]   = useState(true);
+  const showToast = useToast();
 
   const categories = ['all', ...CATEGORIES];
 
-  const loadProducts = async () => {
+  const loadProducts = async (pageNum = 1) => {
     try {
-      setFetching(true);
-      const res = await fetchApi('/products?limit=500');
+      if (pageNum === 1) setFetching(true);
+      else setLoadingMore(true);
+
+      const res = await fetchApi(`/products?page=${pageNum}&limit=20`);
       const mapped = (res?.data || []).map(p => ({
         id: p.id,
         name: p.name,
@@ -41,17 +48,35 @@ const AdminProducts = () => {
         image_url: p.image_url,
         hsn_code: p.hsn_code,
         trade_price: p.trade_price,
+        brand: p.brand || '',
         min_order_qty: p.min_order_qty
       }));
-      setProducts(mapped);
+      
+      if (pageNum === 1) {
+        setProducts(mapped);
+      } else {
+        setProducts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNew = mapped.filter(p => !existingIds.has(p.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+      setHasMore(res?.pagination?.hasNext || false);
     } catch(e) {
       console.error('Failed to load products:', e);
     } finally {
       setFetching(false);
+      setLoadingMore(false);
     }
   };
 
-  useEffect(() => { loadProducts(); }, []);
+  useEffect(() => { loadProducts(1); }, []);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    loadProducts(nextPage);
+  };
 
   const filtered = products.filter(p =>
     (catFilter === 'all' || p.category === catFilter) &&
@@ -62,7 +87,7 @@ const AdminProducts = () => {
 
   const openAdd = () => { setForm(EMPTY_FORM); setEditId(null); setImgPreview(null); setImgFile(null); setShowModal(true); };
   const openEdit = (p) => {
-    setForm({ name:p.name, sku:p.sku, hsn:p.hsn, gstRate:String(p.gstRate), price:String(p.price), moq:String(p.moq), unit:p.unit, stock:String(p.stock), category:p.category, description:'' });
+    setForm({ name:p.name, sku:p.sku, hsn:p.hsn, gstRate:String(p.gstRate), price:String(p.price), moq:String(p.moq), unit:p.unit, stock:String(p.stock), category:p.category, brand:p.brand, description:'' });
     setEditId(p.id); 
     setImgPreview(p.image_url ? `${API_URL}${p.image_url}` : null); 
     setImgFile(null); 
@@ -85,32 +110,35 @@ const AdminProducts = () => {
     formData.append('unit', form.unit);
     formData.append('stock', form.stock);
     formData.append('category', form.category);
+    formData.append('brand', form.brand);
     if (imgFile) formData.append('image', imgFile);
 
     try {
       if (editId) {
-        await fetchApi(`/products/${editId}`, { method: 'PUT', body: formData });
+        await fetchApi(`/products/${editId}`, { method:'PUT', body: formData, isMultipart:true });
+        showToast('Product updated successfully');
       } else {
-        await fetchApi('/products', { method: 'POST', body: formData });
+        await fetchApi('/products', { method:'POST', body: formData, isMultipart:true });
+        showToast('Product created successfully');
       }
       closeModal();
-      loadProducts();
+      loadProducts(1);
     } catch(err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => { 
-    if (window.confirm('Delete this product?')) {
-      try {
-        await fetchApi(`/products/${id}`, { method: 'DELETE' });
-        loadProducts();
-      } catch(e) {
-        alert(e.message);
-      }
-    } 
+    if(!window.confirm('Delete this product?')) return;
+    try {
+      await fetchApi(`/products/${id}`, { method:'DELETE' });
+      showToast('Product deleted');
+      loadProducts(1);
+    } catch(e) {
+      showToast(e.message, 'error');
+    }
   };
 
   return (
@@ -131,8 +159,8 @@ const AdminProducts = () => {
         {categories.map(c => (
           <button key={c} onClick={() => setCatFilter(c)}
             style={{ padding:'7px 18px', borderRadius:'20px', fontFamily:'inherit', fontWeight:500, fontSize:'13px', cursor:'pointer',
-              background: catFilter===c ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'rgba(255,255,255,0.05)',
-              color: catFilter===c ? 'white' : 'var(--text-muted)', border: catFilter===c ? 'none' : '1px solid var(--glass-border)' }}>
+              background: catFilter===c ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'var(--bg-white)',
+              color: catFilter===c ? 'white' : 'var(--text-muted)', border: catFilter===c ? 'none' : '1px solid var(--border-base)' }}>
             {c.charAt(0).toUpperCase()+c.slice(1)}
           </button>
         ))}
@@ -142,7 +170,7 @@ const AdminProducts = () => {
       <div style={{ position:'relative', marginBottom:'20px', maxWidth:'420px' }}>
         <Search size={18} style={{ position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }}/>
         <input type="text" placeholder="Search by name, SKU or HSN…" value={search} onChange={e => setSearch(e.target.value)}
-          style={{ width:'100%', padding:'11px 16px 11px 44px', borderRadius:'var(--radius-md)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+          style={{ width:'100%', padding:'11px 16px 11px 44px', borderRadius:'var(--radius-md)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
       </div>
 
       {/* Table */}
@@ -204,6 +232,19 @@ const AdminProducts = () => {
         </div>
       </div>
 
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={handleLoadMore} 
+            disabled={loadingMore}
+            style={{ padding: '10px 24px' }}
+          >
+            {loadingMore ? 'Loading...' : 'Load More Products'}
+          </button>
+        </div>
+      )}
+
       {/* ─── ADD / EDIT MODAL ─── */}
       {showModal && (
         <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -239,7 +280,7 @@ const AdminProducts = () => {
                 <div style={{ gridColumn:'1/-1' }}>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Product Name *</label>
                   <input required value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Vadilal Blk Vanilla 5 Ltr"
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
                 </div>
 
                 {[
@@ -249,7 +290,7 @@ const AdminProducts = () => {
                   <div key={f.key}>
                     <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>{f.label}</label>
                     <input required value={form[f.key]} onChange={e => setForm(fm=>({...fm,[f.key]:e.target.value}))} placeholder={f.placeholder}
-                      style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+                      style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
                   </div>
                 ))}
 
@@ -257,7 +298,7 @@ const AdminProducts = () => {
                 <div>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>GST Rate *</label>
                   <select value={form.gstRate} onChange={e => setForm(f=>({...f,gstRate:e.target.value}))}
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(15,23,42,0.95)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}>
                     {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
                   </select>
                 </div>
@@ -266,7 +307,7 @@ const AdminProducts = () => {
                 <div>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Unit *</label>
                   <select value={form.unit} onChange={e => setForm(f=>({...f,unit:e.target.value}))}
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(15,23,42,0.95)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}>
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
@@ -275,7 +316,7 @@ const AdminProducts = () => {
                 <div>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Category *</label>
                   <select value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(15,23,42,0.95)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -284,21 +325,28 @@ const AdminProducts = () => {
                 <div>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Price (Ex-GST) ₹ *</label>
                   <input required type="number" min="0" step="0.01" value={form.price} onChange={e => setForm(f=>({...f,price:e.target.value}))} placeholder="475.00"
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
                 </div>
 
                 {/* MOQ */}
                 <div>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Min. Order Qty</label>
                   <input type="number" min="1" value={form.moq} onChange={e => setForm(f=>({...f,moq:e.target.value}))} placeholder="1"
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
                 </div>
 
                 {/* Stock */}
                 <div>
                   <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Current Stock *</label>
                   <input required type="number" min="0" value={form.stock} onChange={e => setForm(f=>({...f,stock:e.target.value}))} placeholder="100"
-                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--glass-border)', background:'rgba(255,255,255,0.05)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
+                </div>
+
+                {/* Brand Name */}
+                <div style={{ gridColumn:'1/-1' }}>
+                  <label style={{ fontSize:'12px', color:'var(--text-muted)', display:'block', marginBottom:'6px' }}>Brand Name</label>
+                  <input value={form.brand} onChange={e => setForm(f=>({...f,brand:e.target.value}))} placeholder="e.g. Vadilal, Amul..."
+                    style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-base)', background:'var(--bg-input)', color:'var(--text-main)', fontFamily:'inherit', outline:'none' }}/>
                 </div>
 
                 {/* GST preview */}

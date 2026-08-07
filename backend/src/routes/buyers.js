@@ -1,11 +1,11 @@
-const express = require('express');
+﻿const express = require('express');
+const pool = require('../utils/db');
 const router = express.Router();
-const { Pool } = require('pg');
 const PDFDocument = require('pdfkit');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateRequest, buyerSchema } = require('../middleware/validate');
+const { uploadToDrive, getOrCreateFolder } = require('../utils/googleDriveService');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // CREATE BUYER
 router.post('/', verifyToken, requireRole('admin'), validateRequest(buyerSchema), async (req, res) => {
@@ -28,17 +28,56 @@ router.post('/', verifyToken, requireRole('admin'), validateRequest(buyerSchema)
 // GET BUYERS
 router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM buyers WHERE company_id = $1 ORDER BY created_at DESC', [req.companyId]);
-    res.json(result.rows);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const result = await pool.query('SELECT * FROM buyers WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [req.companyId, limit, offset]);
+    const countResult = await pool.query('SELECT COUNT(*) FROM buyers WHERE company_id = $1', [req.companyId]);
+    const total = parseInt(countResult.rows[0].count);
+
+    res.json({
+      data: result.rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNext: offset + result.rows.length < total
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// GET MY BUYER PROFILE (for logged-in buyer user)
+router.get('/me', verifyToken, async (req, res) => {
+  try {
+    // Get user record
+    const userRes = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [req.userId]);
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const { email, name } = userRes.rows[0];
+
+    // Try to find matching buyer entity
+    const result = await pool.query('SELECT * FROM buyers WHERE email = $1 LIMIT 1', [email]);
+
+    if (result.rows.length === 0) {
+      // No buyer entity yet — return basic user data so the profile page still works
+      return res.json({ id: null, name, email, status: 'pending', _noBuyerProfile: true });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // GET SINGLE BUYER
 router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM buyers WHERE id = $1', [req.params.id]);
+    const result = await pool.query('SELECT * FROM buyers WHERE id = $1 AND company_id = $2', [req.params.id, req.companyId]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Buyer not found' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -96,19 +135,7 @@ router.get('/:id/generate-agreement', verifyToken, async (req, res) => {
 const multer = require('multer');
 const path = require('path');
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = path.join(__dirname, '../../../uploads/docs');
-    const fs = require('fs');
-    if (!fs.existsSync(dir)){
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, 'Agreement_' + Date.now() + path.extname(file.originalname));
-  }
-});
+const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // UPLOAD AGREEMENT
@@ -117,7 +144,30 @@ router.post('/:id/agreement', verifyToken, upload.single('agreementFile'), async
     let agreementUrl = req.body.agreementUrl;
     
     if (req.file) {
-      agreementUrl = `/uploads/docs/${req.file.filename}`;
+      try {
+        const buyerRes = await pool.query(`
+          SELECT b.name as buyer_name, c.name as admin_company_name 
+          FROM buyers b 
+          JOIN companies c ON b.company_id = c.id 
+          WHERE b.id = $1
+        `, [req.params.id]);
+        
+        const buyerInfo = buyerRes.rows[0];
+        const adminCompanyName = buyerInfo?.admin_company_name || 'Supplier';
+        const buyerCompanyName = buyerInfo?.buyer_name || `Buyer_${req.params.id}`;
+        
+        const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+        
+        const companyFolderId = await getOrCreateFolder(adminCompanyName, rootFolderId);
+        const thisBuyerFolderId = await getOrCreateFolder(buyerCompanyName, companyFolderId);
+        const agreementsFolderId = await getOrCreateFolder('Agreement', thisBuyerFolderId);
+
+        const fileName = `Agreement_${req.params.id}_${Date.now()}${path.extname(req.file.originalname)}`;
+        agreementUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, agreementsFolderId);
+      } catch (uploadError) {
+        console.error('Agreement Upload Error:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload agreement to Google Drive' });
+      }
     }
 
     if (!agreementUrl) {
@@ -181,6 +231,27 @@ router.put('/:id/credit', verifyToken, requireRole('admin'), async (req, res) =>
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE BUYER ADDRESS
+router.put('/:id', verifyToken, async (req, res) => {
+  const { address, city, state, pincode } = req.body;
+  try {
+    // IDOR Check: Ensure buyer is only updating their own profile, or user is admin
+    if (req.role !== 'admin' && Number(req.buyerEntityId) !== Number(req.params.id)) {
+      return res.status(403).json({ error: 'Forbidden: You can only update your own profile' });
+    }
+
+    const result = await pool.query(
+      `UPDATE buyers SET address = $1, city = $2, state = $3, pincode = $4 WHERE id = $5 RETURNING *`,
+      [address, city, state, pincode, req.params.id]
+    );
+    
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Buyer not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

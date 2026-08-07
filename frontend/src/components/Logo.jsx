@@ -14,7 +14,7 @@ const Logo = ({ to = "/shop" }) => {
         position: 'relative',
         width: '42px',
         height: '42px',
-        background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))',
+        background: 'linear-gradient(135deg, var(--color-brand), var(--color-brand-dark))',
         borderRadius: '12px',
         display: 'flex',
         alignItems: 'center',
@@ -29,9 +29,9 @@ const Logo = ({ to = "/shop" }) => {
       </div>
       <div>
         <span style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '0.5px', color: 'var(--text-main)', display: 'block', lineHeight: 1 }}>
-          {firstWord} <span style={{ color: 'var(--color-primary)' }}>{restWords}</span>
+          {firstWord} <span style={{ color: 'var(--color-brand)' }}>{restWords}</span>
         </span>
-        <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
           Wholesale Distribution
         </span>
       </div>

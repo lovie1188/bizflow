@@ -1,15 +1,17 @@
-const express = require('express');
+﻿const express = require('express');
+const pool = require('../utils/db');
 const router = express.Router();
-const { Pool } = require('pg');
 const { verifyToken, requireRole } = require('../middleware/auth');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // GET COMPANY SETTINGS
 router.get('/settings', verifyToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM companies WHERE id = $1', [req.companyId]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+    if (result.rows.length === 0) {
+      console.error('Company not found for req.companyId:', req.companyId);
+      return res.status(404).json({ error: 'Company not found' });
+    }
     
     // Also fetch bank accounts if any (mocked for now, assuming a company_banks table doesn't fully exist yet or isn't used)
     const company = result.rows[0];
@@ -25,7 +27,7 @@ router.get('/settings', verifyToken, requireRole('admin'), async (req, res) => {
 router.put('/settings', verifyToken, requireRole('admin'), async (req, res) => {
   const { 
     name, gstin, udyam_no, phone, email, address, city, state, pincode, invoice_prefix,
-    gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days 
+    gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, custom_domain 
   } = req.body;
   
   try {
@@ -45,10 +47,11 @@ router.put('/settings', verifyToken, requireRole('admin'), async (req, res) => {
            default_payment_terms = COALESCE($12, default_payment_terms),
            eway_bill_threshold = COALESCE($13, eway_bill_threshold),
            msme_alert_days = COALESCE($14, msme_alert_days),
+           custom_domain = COALESCE($15, custom_domain),
            updated_at = NOW()
-       WHERE id = $15 RETURNING *`,
+       WHERE id = $16 RETURNING *`,
       [name, gstin, udyam_no, phone, email, address, city, state, pincode, invoice_prefix, 
-       gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, req.companyId]
+       gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, custom_domain, req.companyId]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });

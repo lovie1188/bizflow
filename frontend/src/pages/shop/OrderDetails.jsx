@@ -58,7 +58,7 @@ const OrderDetails = () => {
   } catch(e){}
 
   return (
-    <div className="container" style={{ padding: '40px 24px' }}>
+    <div className="container-fluid" style={{ padding: '40px 24px' }}>
       <Link to="/shop/orders" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', textDecoration: 'none', marginBottom: '24px' }}>
         <ArrowLeft size={18} /> Back to Orders
       </Link>

@@ -24,24 +24,35 @@ RAZORPAY_SECRET=xxx
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { Pool } = require('pg');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-
 dotenv.config();
 
+require('./utils/logger'); // Initialize logger to override console.error/warn
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const pool = require('./utils/db');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
+const cron = require('node-cron');
+const { performBackup } = require('./services/backupService');
+
 const app = express();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // ============================================================
 // MIDDLEWARE
 // ============================================================
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(helmet({ 
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: false 
+}));
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined'));
+} else {
+  app.use(morgan('dev'));
+}
 
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -241,6 +252,42 @@ const initDB = async () => {
         version VARCHAR(10)
       );
 
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS company_subscriptions (
+        id SERIAL PRIMARY KEY,
+        company_id INT REFERENCES companies(id) ON DELETE CASCADE,
+        feature VARCHAR(50) NOT NULL,
+        status VARCHAR(20) DEFAULT 'inactive',
+        activated_by INT REFERENCES users(id),
+        activated_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        price_monthly DECIMAL(10,2),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, feature)
+      );
+
+      -- Global feature flags (developer master switch)
+      INSERT INTO system_settings (key, value) VALUES ('razorpay_globally_enabled', 'true')  ON CONFLICT (key) DO NOTHING;
+      INSERT INTO system_settings (key, value) VALUES ('whatsapp_globally_enabled',  'false') ON CONFLICT (key) DO NOTHING;
+      INSERT INTO system_settings (key, value) VALUES ('sms_globally_enabled',       'false') ON CONFLICT (key) DO NOTHING;
+
+      -- Monthly pricing (in INR)
+      INSERT INTO system_settings (key, value) VALUES ('feature_price_razorpay',  '999') ON CONFLICT (key) DO NOTHING;
+      INSERT INTO system_settings (key, value) VALUES ('feature_price_whatsapp',  '499') ON CONFLICT (key) DO NOTHING;
+      INSERT INTO system_settings (key, value) VALUES ('feature_price_sms',       '299') ON CONFLICT (key) DO NOTHING;
+
+      -- Feature descriptions
+      INSERT INTO system_settings (key, value) VALUES ('feature_desc_razorpay',  'Accept online payments from buyers via UPI, cards, net banking & wallets through Razorpay secure gateway.') ON CONFLICT (key) DO NOTHING;
+      INSERT INTO system_settings (key, value) VALUES ('feature_desc_whatsapp',  'Send automated invoice reminders, payment receipts and due-date alerts to buyers via WhatsApp Business API.') ON CONFLICT (key) DO NOTHING;
+      INSERT INTO system_settings (key, value) VALUES ('feature_desc_sms',       'Send SMS alerts for invoice generation, payment confirmations and overdue reminders to buyers mobile numbers.') ON CONFLICT (key) DO NOTHING;
+
+
       CREATE TABLE IF NOT EXISTS audit_logs (
         id SERIAL PRIMARY KEY,
         user_id INT REFERENCES users(id),
@@ -277,6 +324,17 @@ initDB();
 const runMigrations = async () => {
   try {
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Other'`);
+    await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(100)`);
+    
+    // Add used_credit to buyers
+    await pool.query(`ALTER TABLE buyers ADD COLUMN IF NOT EXISTS used_credit DECIMAL(12,2) DEFAULT 0`);
+    
+    // Add columns for invoices GST split
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS taxable_amount DECIMAL(12,2)`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gst_amount DECIMAL(12,2)`);
+
+    // Add updated_at to companies
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
     
     // Delivery & Documentation columns for orders
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tc_accepted_at TIMESTAMP`);
@@ -301,6 +359,8 @@ const runMigrations = async () => {
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS default_payment_terms VARCHAR(100) DEFAULT '15 Days (No agreement)'`);
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS eway_bill_threshold VARCHAR(100) DEFAULT '₹50,000 (Mandatory)'`);
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS msme_alert_days VARCHAR(100) DEFAULT '45 Days — MSME Protected'`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS setup_complete BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE buyers   ADD COLUMN IF NOT EXISTS msme_no VARCHAR(100)`);
 
     console.log('Migrations applied');
   } catch (err) {
@@ -327,6 +387,14 @@ const buyersRoutes = require('./routes/buyers');
 const paymentsRoutes = require('./routes/payments');
 const companiesRoutes = require('./routes/companies');
 const usersRoutes = require('./routes/users');
+const developerRoutes = require('./routes/developer');
+const auditLogsRoutes = require('./routes/auditLogs');
+const consentRoutes = require('./routes/consentRecords');
+const notificationsRoutes = require('./routes/notifications');
+const settingsRoutes = require('./routes/settings');
+const subscriptionsRoutes = require('./routes/subscriptions');
+const exportRoutes = require('./routes/export'); // NEW
+const publicRoutes = require('./routes/public');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -337,10 +405,54 @@ app.use('/api/buyers', buyersRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/companies', companiesRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/developer', developerRoutes);
+app.use('/api/audit-logs', auditLogsRoutes);
+app.use('/api/consent', consentRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes);
+app.use('/api/developer', exportRoutes); // export routes: /api/developer/export, /api/developer/export/check
+app.use('/api/public', publicRoutes);
+
+// ============================================================
+// CRON JOBS
+// ============================================================
+// Schedule DB backup every day at midnight (0 0 * * *)
+cron.schedule('0 0 * * *', async () => {
+  console.log('Cron Job: Running daily auto-backup...');
+  try {
+    await performBackup();
+  } catch (error) {
+    console.error('Cron Job: Backup failed:', error.message);
+  }
+});
+
+// Schedule MSME 45-Day overdue reminders — daily at 8 AM IST
+const { scheduleOverdueReminders } = require('./jobs/overdueReminder');
+scheduleOverdueReminders();
 
 // HEALTH CHECK
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// ============================================================
+// 404 — Unknown API Routes (must be BEFORE global error handler)
+// ============================================================
+app.use('/api', (req, res, next) => {
+  res.status(404).json({ success: false, error: `API route not found: ${req.method} ${req.originalUrl}` });
+});
+
+// ============================================================
+// GLOBAL ERROR HANDLER
+// ============================================================
+app.use((err, req, res, next) => {
+  console.error(`[Unhandled Error] ${req.method} ${req.url} - ${err.message}`, err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal Server Error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
 // ============================================================

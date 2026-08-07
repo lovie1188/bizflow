@@ -1,20 +1,44 @@
 const express = require('express');
+const pool = require('../utils/db');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { Pool } = require('pg');
+const { logAudit } = require('../utils/audit');
+const rateLimit = require('express-rate-limit');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// REGISTER NEW COMPANY
-router.post('/register', async (req, res) => {
+// ── Rate Limiter: 10 attempts per 15 minutes per IP on auth routes ──
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// REGISTER NEW COMPANY (Rate Limited)
+router.post('/register', authLimiter, async (req, res) => {
   const { companyName, gstin, email, password } = req.body;
-  
+
+  // Validate required fields
+  if (!companyName || !gstin || !email || !password) {
+    return res.status(400).json({ error: 'companyName, gstin, email, and password are required.' });
+  }
+  // Validate GSTIN format: 15-char alphanumeric per Indian GST rules
+  const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  if (!gstinRegex.test(gstin)) {
+    return res.status(400).json({ error: 'Invalid GSTIN format. Must be 15 characters (e.g., 29ABCDE1234F1Z5).' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // Start transaction
     await pool.query('BEGIN');
+
 
     const companyResult = await pool.query(
       'INSERT INTO companies (name, gstin) VALUES ($1, $2) RETURNING id',
@@ -40,6 +64,10 @@ router.post('/register', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
+    
+    // Explicitly attach userId to req for logging
+    req.userId = userId;
+    await logAudit(req, 'Company Registered', 'Company', companyId, { companyName, email });
 
     res.json({ 
       success: true, 
@@ -53,15 +81,17 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// REGISTER NEW BUYER
-router.post('/register-buyer', async (req, res) => {
+// REGISTER NEW BUYER (Rate Limited)
+router.post('/register-buyer', authLimiter, async (req, res) => {
   const { businessName, gstin, phone, address, email, password, companyId } = req.body;
   
-  // We need a companyId to attach this buyer to a supplier.
-  // In a single-supplier setup, we default to 1 if not provided.
-  const supplierId = companyId || 1;
-  
   try {
+    let supplierId = companyId;
+    if (!supplierId) {
+      const activeCompanyRes = await pool.query('SELECT id FROM companies ORDER BY id ASC LIMIT 1');
+      supplierId = activeCompanyRes.rows.length > 0 ? activeCompanyRes.rows[0].id : 1;
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // Start transaction
@@ -102,8 +132,8 @@ router.post('/register-buyer', async (req, res) => {
   }
 });
 
-// LOGIN
-router.post('/login', async (req, res) => {
+// LOGIN (Rate Limited)
+router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   
   try {
@@ -150,6 +180,9 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
+    
+    req.userId = user.id;
+    await logAudit(req, 'User Login', 'User', user.id, { email, role: user.company_role || user.role });
 
     res.json({ 
       success: true, 
@@ -163,4 +196,45 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ── POST /auth/setup ─────────────────────────────────────────────
+// Called by frontend AuthContext.completeSetup() after first login.
+// Updates company profile (address, phone, invoice_prefix etc.) and marks setup_complete.
+const { verifyToken } = require('../middleware/auth');
+router.post('/setup', verifyToken, async (req, res) => {
+  try {
+    const { companyName, gstin, phone, address, city, state, pincode, invoicePrefix } = req.body;
+    const result = await pool.query(
+      `UPDATE companies SET
+        name            = COALESCE($1, name),
+        gstin           = COALESCE($2, gstin),
+        phone           = COALESCE($3, phone),
+        address         = COALESCE($4, address),
+        city            = COALESCE($5, city),
+        state           = COALESCE($6, state),
+        pincode         = COALESCE($7, pincode),
+        invoice_prefix  = COALESCE($8, invoice_prefix),
+        setup_complete  = true
+       WHERE id = $9 RETURNING *`,
+      [companyName, gstin, phone, address, city, state, pincode, invoicePrefix, req.companyId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+    await logAudit(req, 'Company Setup Complete', 'Company', req.companyId, { companyName });
+    res.json({ success: true, company: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /auth/logout ─────────────────────────────────────────────
+// Optional: creates an audit trail for logout (token invalidation is client-side)
+router.post('/logout', verifyToken, async (req, res) => {
+  try {
+    await logAudit(req, 'User Logout', 'User', req.userId, {});
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

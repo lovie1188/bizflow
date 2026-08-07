@@ -1,23 +1,15 @@
-const express = require('express');
+﻿const express = require('express');
+const pool = require('../utils/db');
 const router = express.Router();
-const { Pool } = require('pg');
 const multer = require('multer');
 const path = require('path');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateRequest, productSchema } = require('../middleware/validate');
+const { uploadToDrive, getOrCreateFolder } = require('../utils/googleDriveService');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// Configure Multer for image uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../../uploads'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Configure Multer for in-memory uploads before sending to Google Drive
+const storage = multer.memoryStorage();
 
 const upload = multer({ 
   storage: storage,
@@ -40,13 +32,30 @@ router.post('/', verifyToken, requireRole('admin'), upload.single('image'), asyn
     return res.status(400).json({ error: error.details.map(d => d.message).join(', ') });
   }
 
-  const { sku, name, hsnCode, gstRate, unit, buyPrice, tradePrice, minOrderQty } = req.body;
-  const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+  const { sku, name, hsnCode, gstRate, unit, buyPrice, tradePrice, minOrderQty, brand } = req.body;
+  
+  let imageUrl = null;
+  if (req.file) {
+    try {
+      const companyRes = await pool.query('SELECT name FROM companies WHERE id = $1', [req.companyId]);
+      const companyName = companyRes.rows[0]?.name || `Company_${req.companyId}`;
+      const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      
+      const companyFolderId = await getOrCreateFolder(companyName, rootFolderId);
+      const productsFolderId = await getOrCreateFolder('Products', companyFolderId);
+      const imagesFolderId = await getOrCreateFolder('images', productsFolderId);
+
+      const fileName = `product-${Date.now()}-${req.file.originalname}`;
+      imageUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, imagesFolderId, true);
+    } catch (uploadError) {
+      return res.status(500).json({ error: 'Failed to upload image to Google Drive' });
+    }
+  }
   
   try {
     const result = await pool.query(
-      'INSERT INTO products (company_id, sku, name, hsn_code, gst_rate, unit, buy_price, trade_price, min_order_qty, image_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-      [req.companyId, sku, name, hsnCode, gstRate, unit, buyPrice, tradePrice, minOrderQty, imageUrl]
+      'INSERT INTO products (company_id, sku, name, hsn_code, gst_rate, unit, buy_price, trade_price, min_order_qty, image_url, brand) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *',
+      [req.companyId, sku, name, hsnCode, gstRate, unit, buyPrice, tradePrice, minOrderQty, imageUrl, brand || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -83,6 +92,21 @@ router.get('/', async (req, res) => {
     const dataResult = await pool.query(query, params);
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
+
+    // Fetch all distinct brands for the filter
+    let brandsQuery = 'SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL';
+    let categoriesQuery = 'SELECT DISTINCT category FROM products WHERE category IS NOT NULL';
+    let brandsParams = [];
+    if (companyId) {
+      brandsQuery += ' AND company_id = $1';
+      categoriesQuery += ' AND company_id = $1';
+      brandsParams.push(companyId);
+    }
+    const brandsResult = await pool.query(brandsQuery, brandsParams);
+    const allBrands = brandsResult.rows.map(r => r.brand).sort();
+
+    const categoriesResult = await pool.query(categoriesQuery, brandsParams);
+    const allCategories = categoriesResult.rows.map(r => r.category).sort();
     
     res.json({
       data: dataResult.rows,
@@ -90,7 +114,9 @@ router.get('/', async (req, res) => {
         page, limit, total,
         pages: Math.ceil(total / limit),
         hasNext: page < Math.ceil(total / limit),
-        hasPrev: page > 1
+        hasPrev: page > 1,
+        allBrands,
+        allCategories
       }
     });
   } catch (err) {
@@ -112,8 +138,25 @@ router.get('/:id', async (req, res) => {
 // UPDATE PRODUCT
 router.put('/:id', verifyToken, requireRole('admin'), upload.single('image'), async (req, res) => {
   const body = req.body || {};
-  const { name, sku, hsn_code, gst_rate, unit, buy_price, trade_price, min_order_qty, stock, category } = body;
-  const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+  const { name, sku, hsn_code, gst_rate, unit, buy_price, trade_price, min_order_qty, stock, category, brand } = body;
+  
+  let imageUrl = undefined;
+  if (req.file) {
+    try {
+      const companyRes = await pool.query('SELECT name FROM companies WHERE id = $1', [req.companyId]);
+      const companyName = companyRes.rows[0]?.name || `Company_${req.companyId}`;
+      const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      
+      const companyFolderId = await getOrCreateFolder(companyName, rootFolderId);
+      const productsFolderId = await getOrCreateFolder('Products', companyFolderId);
+      const imagesFolderId = await getOrCreateFolder('images', productsFolderId);
+
+      const fileName = `product-${Date.now()}-${req.file.originalname}`;
+      imageUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, imagesFolderId, true);
+    } catch (uploadError) {
+      return res.status(500).json({ error: 'Failed to upload image to Google Drive' });
+    }
+  }
 
   try {
     const result = await pool.query(
@@ -128,9 +171,10 @@ router.put('/:id', verifyToken, requireRole('admin'), upload.single('image'), as
         min_order_qty = COALESCE($8, min_order_qty),
         stock = COALESCE($9, stock),
         category = COALESCE($10, category),
-        image_url = COALESCE($11, image_url)
-      WHERE id = $12 AND company_id = $13 RETURNING *`,
-      [name, sku, hsn_code, gst_rate, unit, buy_price, trade_price, min_order_qty, stock, category, imageUrl, req.params.id, req.companyId]
+        brand = COALESCE($11, brand),
+        image_url = COALESCE($12, image_url)
+      WHERE id = $13 AND company_id = $14 RETURNING *`,
+      [name, sku, hsn_code, gst_rate, unit, buy_price, trade_price, min_order_qty, stock, category, brand || undefined, imageUrl, req.params.id, req.companyId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     res.json(result.rows[0]);

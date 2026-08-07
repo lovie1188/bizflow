@@ -1,13 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, Building, FileText, UserPlus } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { fetchApi } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
 const BuyerRegister = () => {
   const navigate = useNavigate();
-  const { company } = useAuth() || {};
-  const companyName = company?.name || 'Charu Marketing';
+  const { storeName } = useParams();
+  const [supplierCompany, setSupplierCompany] = useState(null);
+
+  const hostname = window.location.hostname;
+  const isCustomDomain = hostname !== 'localhost' && !hostname.includes('bizflow.in');
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        let endpoint = isCustomDomain 
+          ? `/public/domain/${hostname}` 
+          : `/public/store/${encodeURIComponent(storeName)}`;
+        const data = await fetchApi(endpoint);
+        if (data.success) setSupplierCompany(data.company);
+      } catch (err) { console.error('Failed to fetch store info for registration', err); }
+    };
+    fetchCompany();
+  }, [storeName, isCustomDomain, hostname]);
+
+  const companyName = supplierCompany?.name || 'Supplier';
   const [formData, setFormData] = useState({
     businessName: '',
     gstin: '',
@@ -26,7 +44,10 @@ const BuyerRegister = () => {
     try {
       const data = await fetchApi('/auth/register-buyer', {
         method: 'POST',
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          companyId: supplierCompany?.id || null  // send supplier's companyId so buyer links to correct company
+        })
       });
       // Registration successful, token generated
       localStorage.setItem('bizflow_token', data.token);

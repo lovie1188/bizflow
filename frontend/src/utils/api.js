@@ -1,7 +1,7 @@
 // src/utils/api.js
 
-export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-const API_BASE_URL = `${API_URL}/api`;
+export const API_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+export const API_BASE_URL = `${API_URL}/api`;
 
 /**
  * Custom fetch wrapper that automatically attaches the JWT token from localStorage.
@@ -34,8 +34,8 @@ export const fetchApi = async (endpoint, options = {}) => {
       errorMessage = errorData.error || errorData.message || errorMessage;
     } catch (_) {}
 
-    // Auto-logout on 401
-    if (response.status === 401) {
+    // Auto-logout on 401 (unless it's a login attempt)
+    if (response.status === 401 && !endpoint.includes('/auth/login')) {
       localStorage.removeItem('bizflow_token');
       localStorage.removeItem('bizflow_user');
       localStorage.removeItem('bizflow_company');

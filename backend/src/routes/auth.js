@@ -238,11 +238,15 @@ router.post('/setup', verifyToken, async (req, res) => {
 });
 
 // ── POST /auth/logout ─────────────────────────────────────────────
-// Optional: creates an audit trail for logout (token invalidation is client-side)
+// H-3: Revoke JWT token and record audit trail
 router.post('/logout', verifyToken, async (req, res) => {
   try {
+    const { revokeToken } = require('../utils/tokenBlacklist');
+    if (req.token) {
+      revokeToken(req.token);
+    }
     await logAudit(req, 'User Logout', 'User', req.userId, {});
-    res.json({ success: true, message: 'Logged out successfully' });
+    res.json({ success: true, message: 'Logged out successfully. Token invalidated.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

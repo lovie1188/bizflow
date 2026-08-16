@@ -114,7 +114,8 @@ const BuyerRegister = () => {
 
           <div>
             <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Password *</label>
-            <input required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Create a password" style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', outline: 'none' }} />
+            <input required type="password" minLength={8} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Create a password" style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', outline: 'none' }} />
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Must be at least 8 characters with letters & numbers</span>
           </div>
 
           <div>

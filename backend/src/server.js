@@ -24,7 +24,8 @@ RAZORPAY_SECRET=xxx
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 require('./utils/logger'); // Initialize logger to override console.error/warn
 const jwt = require('jsonwebtoken');
@@ -408,7 +409,6 @@ runMigrations();
 // ============================================================
 // STATIC FILES (UPLOADS)
 // ============================================================
-const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ============================================================

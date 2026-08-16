@@ -43,7 +43,7 @@ const DeliveryDashboard = () => {
     try {
       await fetchApi(`/orders/${id}/delivery`, {
         method: 'PUT',
-        body: JSON.stringify({ delivery_status: status, tracking_note: note })
+        body: { delivery_status: status, tracking_note: note } // M-6: fetchApi handles JSON.stringify internally
       });
 
 

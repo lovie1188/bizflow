@@ -4,10 +4,8 @@ const pool = require('../utils/db');
 const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateRequest, orderSchema } = require('../middleware/validate');
-
-
 const { generatePO, generateInvoice, renderPOHtml } = require('../utils/pdfGenerator');
-const { sendPurchaseOrder } = require('../utils/notifications');
+const { sendPurchaseOrder, sendEmail } = require('../utils/notifications'); // M-11: hoisted from inside loop
 
 // // ─────────────────────────────────────────────
 // CREATE ORDER
@@ -126,7 +124,6 @@ router.post('/', verifyToken, validateRequest(orderSchema), async (req, res) => 
       const remaining = p.stock;
       const minQty = p.min_order_qty || 1;
       if (remaining <= minQty) {
-        const { sendEmail } = require('../utils/notifications');
         const companyRes = await pool.query('SELECT email, name FROM companies WHERE id = $1', [companyId]);
         if (companyRes.rows[0]?.email) {
           const emailHtml = `

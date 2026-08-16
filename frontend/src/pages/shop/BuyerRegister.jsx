@@ -44,10 +44,10 @@ const BuyerRegister = () => {
     try {
       const data = await fetchApi('/auth/register-buyer', {
         method: 'POST',
-        body: JSON.stringify({
+        body: { // M-6: fetchApi handles JSON.stringify internally
           ...formData,
-          companyId: supplierCompany?.id || null  // send supplier's companyId so buyer links to correct company
-        })
+          companyId: supplierCompany?.id || null
+        }
       });
       // Registration successful, token generated
       localStorage.setItem('bizflow_token', data.token);

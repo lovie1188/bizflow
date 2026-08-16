@@ -63,8 +63,22 @@ if (process.env.NODE_ENV === 'production') {
   app.use(morgan('dev'));
 }
 
+// M-7: Support multiple allowed origins via comma-separated CORS_ORIGIN env var
+// e.g., CORS_ORIGIN=https://app.bizflow.in,https://staging.bizflow.in
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN,
+  origin: (origin, callback) => {
+    // Allow server-to-server requests (no origin header) and whitelisted origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -458,14 +472,31 @@ app.use('/api', (req, res, next) => {
 });
 
 // ============================================================
-// GLOBAL ERROR HANDLER
+// GLOBAL ERROR HANDLER (M-5: Never expose raw DB errors to clients)
 // ============================================================
 app.use((err, req, res, next) => {
-  console.error(`[Unhandled Error] ${req.method} ${req.url} - ${err.message}`, err);
-  res.status(err.status || 500).json({
+  // Always log the full error server-side for debugging
+  console.error(`[Error] ${req.method} ${req.url} — ${err.message}`, err.stack);
+
+  const status = err.status || err.statusCode || 500;
+
+  // In development, expose full details to aid debugging
+  if (process.env.NODE_ENV === 'development') {
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Internal Server Error',
+      stack: err.stack
+    });
+  }
+
+  // In production: only expose message for client-safe errors (4xx).
+  // For 5xx, return a generic message to avoid leaking DB internals.
+  const isSafeError = status >= 400 && status < 500;
+  res.status(status).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    message: isSafeError
+      ? (err.message || 'Bad request')
+      : 'An internal server error occurred. Please try again or contact support.'
   });
 });
 

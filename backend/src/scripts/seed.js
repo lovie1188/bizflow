@@ -9,6 +9,13 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const seedDB = async () => {
+  // M-9/M-10: Use SEED_PASSWORD env var instead of hardcoded weak password.
+  // NEVER run seed with a weak password against a production database.
+  const seedPassword = process.env.SEED_PASSWORD || 'BizFlow@Dev2026!';
+  if (!process.env.SEED_PASSWORD) {
+    console.warn('[SEED WARNING] SEED_PASSWORD not set — using default dev password. DO NOT seed production without setting this env var!');
+  }
+
   try {
     console.log('Connecting to database...');
     
@@ -36,7 +43,7 @@ const seedDB = async () => {
     const adminCompanyId = companyRes.rows[0].id;
 
     // 3. Create Admin User
-    const adminPassHash = await bcrypt.hash('password123', 10);
+    const adminPassHash = await bcrypt.hash(seedPassword, 10);
     const userRes = await pool.query(`
       INSERT INTO users (name, email, password_hash, role, active)
       VALUES ($1, $2, $3, $4, $5)
@@ -91,7 +98,7 @@ const seedDB = async () => {
     const buyer2Id = buyer2Res.rows[0].id;
 
     // 6. Create Buyer Users
-    const buyerPassHash = await bcrypt.hash('password123', 10);
+    const buyerPassHash = await bcrypt.hash(seedPassword, 10);
     
     // Buyer User 1
     const userB1Res = await pool.query(`
@@ -143,9 +150,11 @@ const seedDB = async () => {
 
     console.log('\n=== Seed Completed Successfully ===\n');
     console.log('Login Details for Testing:');
-    console.log('Admin: admin@bizflow.com / password123');
-    console.log('Buyer 1 (Acme): buyer1@acmecorp.com / password123');
-    console.log('Buyer 2 (TechMec): buyer2@techmec.com / password123');
+    console.log('Admin: admin@bizflow.com');
+    console.log('Buyer 1 (Acme): buyer1@acmecorp.com');
+    console.log('Buyer 2 (TechMec): buyer2@techmec.com');
+    // M-9/M-10: Do not print the seed password — check your SEED_PASSWORD env var
+    console.log('Password: [set via SEED_PASSWORD env var]');
 
   } catch (error) {
     console.error('Seeding failed:', error);

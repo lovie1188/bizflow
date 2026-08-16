@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await fetchApi('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: { email, password }, // M-6: fetchApi handles JSON.stringify internally
       });
 
       const userData    = data.user;
@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await fetchApi('/auth/setup', {
         method: 'POST',
-        body: JSON.stringify(setupData),
+        body: setupData, // M-6: fetchApi handles JSON.stringify internally
       });
       const updatedCompany = { ...company, ...data.company, setup_complete: true };
       localStorage.setItem('bizflow_company', JSON.stringify(updatedCompany));

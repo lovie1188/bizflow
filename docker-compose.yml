@@ -4,8 +4,11 @@ services:
     image: postgres:15
     container_name: bizflow_postgres
     environment:
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: bizflow_dev
+      # M-9: Never hardcode DB passwords — set POSTGRES_PASSWORD in your shell or .env file
+      # e.g., export POSTGRES_PASSWORD=YourStr0ngPassword! before running docker-compose up
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD env var is required. Set it before running docker-compose.}
+      POSTGRES_DB: ${POSTGRES_DB:-bizflow_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-bizflow}
     ports:
       - "5432:5432"
     volumes:
@@ -13,6 +16,8 @@ services:
   redis:
     image: redis:7
     container_name: bizflow_redis
+    command: >
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then redis-server --requirepass "$$REDIS_PASSWORD"; else redis-server; fi'
     ports:
       - "6379:6379"
 volumes:

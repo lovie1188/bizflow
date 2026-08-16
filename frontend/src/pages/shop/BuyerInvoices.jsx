@@ -74,7 +74,7 @@ const BuyerInvoices = () => {
       // 1. Create Razorpay order on backend
       const res = await fetchApi('/payments/create-order', {
         method: 'POST',
-        body: JSON.stringify({ invoiceId: inv.id })
+        body: { invoiceId: inv.id } // M-6: fetchApi handles JSON.stringify internally
       });
 
       if (!res.orderId) {

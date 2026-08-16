@@ -1,14 +1,30 @@
-﻿const express = require('express');
+const express = require('express');
 const pool = require('../utils/db');
 const router  = express.Router();
 const { verifyToken } = require('../middleware/auth');
 
 
+// Whitelist of setting keys safe to expose publicly
+const PUBLIC_SETTING_KEYS = [
+  'app_name',
+  'razorpay_enabled',
+  'whatsapp_enabled',
+  'sms_enabled',
+  'maintenance_mode',
+  'msme_payment_days',
+  'support_email',
+  'currency',
+];
+
 // ── GET /api/settings/public ───────────────────────────────────
-// Returns global feature flags + pricing (no auth needed — used by frontend)
+// Returns only whitelisted feature flags + pricing (no auth needed — used by frontend)
 router.get('/public', async (req, res) => {
   try {
-    const result = await pool.query('SELECT key, value FROM system_settings');
+    const placeholders = PUBLIC_SETTING_KEYS.map((_, i) => `$${i + 1}`).join(', ');
+    const result = await pool.query(
+      `SELECT key, value FROM system_settings WHERE key IN (${placeholders})`,
+      PUBLIC_SETTING_KEYS
+    );
     const settings = {};
     result.rows.forEach(row => { settings[row.key] = row.value; });
     res.json(settings);

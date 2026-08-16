@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const pool = require('../utils/db');
 const router = express.Router();
 const multer = require('multer');
@@ -64,36 +64,50 @@ router.post('/', verifyToken, requireRole('admin'), upload.single('image'), asyn
 });
 
 // GET PRODUCTS (Paginated)
+// Public access allowed for buyer storefront, but sensitive fields stripped for unauthenticated callers.
 router.get('/', async (req, res) => {
-  // Allow public access for buyer storefront, but filter by companyId if provided
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    // L-6: Cap limit to prevent full-table dumps
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
-    
-    // In single-supplier mode, we might just fetch all active products
-    // For multi-company, we need company_id from query or header
-    const companyId = req.query.companyId; 
-    
-    let query = 'SELECT * FROM products';
+    const companyId = req.query.companyId;
+
+    // Determine if caller is an authenticated admin (to allow buy_price)
+    let isAuthenticatedAdmin = false;
+    try {
+      const jwt = require('jsonwebtoken');
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        isAuthenticatedAdmin = decoded?.role === 'admin';
+      }
+    } catch (_) { /* unauthenticated — fine for public catalog */ }
+
+    // H-7: Strip internal cost field (buy_price) from public responses
+    const publicFields = `id, company_id, sku, name, hsn_code, gst_rate, unit, trade_price,
+      min_order_qty, image_url, brand, category, description, stock, created_at, updated_at`;
+    const adminFields = `*`;
+    const selectFields = isAuthenticatedAdmin ? adminFields : publicFields;
+
+    let query = `SELECT ${selectFields} FROM products`;
     let countQuery = 'SELECT COUNT(*) FROM products';
     let params = [limit, offset];
     let countParams = [];
-    
+
     if (companyId) {
       query += ' WHERE company_id = $3';
       countQuery += ' WHERE company_id = $1';
       params.push(companyId);
       countParams.push(companyId);
     }
-    
+
     query += ' ORDER BY created_at DESC LIMIT $1 OFFSET $2';
-    
+
     const dataResult = await pool.query(query, params);
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
 
-    // Fetch all distinct brands for the filter
     let brandsQuery = 'SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL';
     let categoriesQuery = 'SELECT DISTINCT category FROM products WHERE category IS NOT NULL';
     let brandsParams = [];
@@ -107,7 +121,7 @@ router.get('/', async (req, res) => {
 
     const categoriesResult = await pool.query(categoriesQuery, brandsParams);
     const allCategories = categoriesResult.rows.map(r => r.category).sort();
-    
+
     res.json({
       data: dataResult.rows,
       pagination: {

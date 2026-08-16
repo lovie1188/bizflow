@@ -84,7 +84,15 @@ router.post('/register', authLimiter, async (req, res) => {
 // REGISTER NEW BUYER (Rate Limited)
 router.post('/register-buyer', authLimiter, async (req, res) => {
   const { businessName, gstin, phone, address, email, password, companyId } = req.body;
-  
+
+  // H-9: Password complexity enforcement
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+  }
+  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return res.status(400).json({ error: 'Password must contain at least one letter and one number.' });
+  }
+
   try {
     let supplierId = companyId;
     if (!supplierId) {

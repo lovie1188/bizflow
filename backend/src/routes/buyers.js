@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const pool = require('../utils/db');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
@@ -141,6 +141,16 @@ const upload = multer({ storage: storage });
 // UPLOAD AGREEMENT
 router.post('/:id/agreement', verifyToken, upload.single('agreementFile'), async (req, res) => {
   try {
+    // IDOR Check: Ensure user is admin of the buyer's company or the buyer uploading for themselves
+    if (req.role === 'admin') {
+      const checkRes = await pool.query('SELECT id FROM buyers WHERE id = $1 AND company_id = $2', [req.params.id, req.companyId]);
+      if (checkRes.rows.length === 0) {
+        return res.status(403).json({ error: 'Forbidden: Access denied for this buyer' });
+      }
+    } else if (Number(req.buyerEntityId) !== Number(req.params.id)) {
+      return res.status(403).json({ error: 'Forbidden: You can only upload an agreement for your own account' });
+    }
+
     let agreementUrl = req.body.agreementUrl;
     
     if (req.file) {

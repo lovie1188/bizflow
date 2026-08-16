@@ -9,10 +9,10 @@ const { validateRequest, orderSchema } = require('../middleware/validate');
 const { generatePO, generateInvoice, renderPOHtml } = require('../utils/pdfGenerator');
 const { sendPurchaseOrder } = require('../utils/notifications');
 
-// ─────────────────────────────────────────────
+// // ─────────────────────────────────────────────
 // CREATE ORDER
 // ─────────────────────────────────────────────
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, validateRequest(orderSchema), async (req, res) => {
   const { buyerId, items, dueDate, deliveryAddress, notes, tcSignature, saveAddressToProfile } = req.body;
 
   if (!tcSignature || tcSignature.trim() === '') {
@@ -27,10 +27,10 @@ router.post('/', verifyToken, async (req, res) => {
     if (buyerRes.rows.length === 0) throw new Error('Buyer not found');
     const buyer = buyerRes.rows[0];
 
-    const companyId = req.companyId;
+    const companyId = req.companyId || buyer.company_id;
     if (!companyId) return res.status(400).json({ error: 'Company ID is required' });
     const companyRes = await pool.query('SELECT * FROM companies WHERE id = $1', [companyId]);
-    const supplier = companyRes.rows[0] || { name: 'Charu Marketing', gstin: '08AWPSB0932G1ZM' };
+    const supplier = companyRes.rows[0] || { name: 'Supplier', gstin: 'N/A' };
 
     if (buyer.status !== 'approved') {
       if (!buyer.grace_period_expires_at || new Date() > new Date(buyer.grace_period_expires_at)) {
@@ -46,7 +46,7 @@ router.post('/', verifyToken, async (req, res) => {
     for (const item of items) {
       const prodRes = await pool.query(
         'SELECT name, trade_price, gst_rate, hsn_code, stock FROM products WHERE id = $1 AND company_id = $2',
-        [item.productId, req.companyId || 3]
+        [item.productId, companyId]
       );
       if (prodRes.rows.length === 0) throw new Error(`Product not found.`);
       const product = prodRes.rows[0];
@@ -90,7 +90,7 @@ router.post('/', verifyToken, async (req, res) => {
         due_date, delivery_address, notes, tc_signature, tc_accepted_at
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
-        req.companyId || 3,
+        companyId,
         orderNumber, req.userId, buyerId,
         grandTotal, subtotal, gstAmount, grandTotal, verifiedItems.length,
         dueDate, deliveryAddress, notes, tcSignature, tcAcceptedAt
@@ -122,7 +122,7 @@ router.post('/', verifyToken, async (req, res) => {
         const minQty = p.min_order_qty || 1;
         if (remaining <= minQty) {
           const { sendEmail } = require('../utils/notifications');
-          const companyRes = await pool.query('SELECT email, name FROM companies WHERE id = $1', [req.companyId]);
+          const companyRes = await pool.query('SELECT email, name FROM companies WHERE id = $1', [companyId]);
           if (companyRes.rows[0]?.email) {
             const emailHtml = `
               <div style="font-family:Arial,sans-serif;padding:16px;max-width:500px;border:2px solid #f59e0b;border-radius:8px;">
@@ -139,7 +139,6 @@ router.post('/', verifyToken, async (req, res) => {
       }
     }
 
-
     // Generate URL-based references (no file writing)
     const orderDataForPdf = { ...order, items: verifiedItems };
     const poUrl = await generatePO(orderDataForPdf, buyer, supplier);
@@ -155,7 +154,7 @@ router.post('/', verifyToken, async (req, res) => {
     await pool.query(
       `INSERT INTO invoices (company_id, order_id, buyer_entity_id, invoice_number, amount, taxable_amount, gst_amount, due_date, msme_protected)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [req.companyId || 3, orderId, buyerId, invoiceNumber, grandTotal, subtotal, gstAmount, dueDate, true]
+      [companyId, orderId, buyerId, invoiceNumber, grandTotal, subtotal, gstAmount, dueDate, true]
     );
 
     // Deduct credit

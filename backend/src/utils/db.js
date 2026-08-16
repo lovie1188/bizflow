@@ -12,12 +12,14 @@
 
 const { Pool } = require('pg');
 
+const isRemoteDb = process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('neon.tech') || process.env.DATABASE_URL.includes('sslmode=require'));
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Neon-friendly: keep idle connections short to stay within connection limits
-  max: 10,                // max 10 simultaneous connections
-  idleTimeoutMillis: 30000,  // release idle connections after 30 seconds
-  connectionTimeoutMillis: 5000, // fail fast if no connection available within 5s
+  ssl: isRemoteDb ? { rejectUnauthorized: false } : undefined,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 15000, // 15s to allow Neon serverless wake-up
 });
 
 pool.on('error', (err) => {

@@ -46,7 +46,7 @@ router.post('/', verifyToken, requireRole('admin'), upload.single('image'), asyn
       const imagesFolderId = await getOrCreateFolder('images', productsFolderId);
 
       const fileName = `product-${Date.now()}-${req.file.originalname}`;
-      imageUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, imagesFolderId, true);
+      imageUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, imagesFolderId, false); // product images private — served via Drive viewer link
     } catch (uploadError) {
       return res.status(500).json({ error: 'Failed to upload image to Google Drive' });
     }
@@ -166,7 +166,7 @@ router.put('/:id', verifyToken, requireRole('admin'), upload.single('image'), as
       const imagesFolderId = await getOrCreateFolder('images', productsFolderId);
 
       const fileName = `product-${Date.now()}-${req.file.originalname}`;
-      imageUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, imagesFolderId, true);
+      imageUrl = await uploadToDrive(req.file.buffer, fileName, req.file.mimetype, imagesFolderId, false); // product images private — served via Drive viewer link
     } catch (uploadError) {
       return res.status(500).json({ error: 'Failed to upload image to Google Drive' });
     }

@@ -2,11 +2,11 @@ const express = require('express');
 const pool = require('../utils/db');
 const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
+const featureGate = require('../middleware/featureGate');
 const Razorpay = require('razorpay');
 
-
-// CREATE RAZORPAY ORDER
-router.post('/create-order', verifyToken, async (req, res) => {
+// CREATE RAZORPAY ORDER — blocked if 'razorpay' feature disabled for this company
+router.post('/create-order', verifyToken, featureGate('razorpay'), async (req, res) => {
   const { invoiceId } = req.body;
   try {
     const isAdmin = ['admin', 'supplier'].includes(req.role);

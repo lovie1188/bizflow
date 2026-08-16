@@ -7,18 +7,28 @@ const { google } = require('googleapis');
 const KEYFILEPATH = path.join(__dirname, '../../google-service-account.json');
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
-// Use environment variables for DB parsing
-const DB_URL = process.env.DATABASE_URL;
-// Parse postgres://user:pass@host:port/dbname
-const dbUrl = new URL(process.env.DATABASE_URL);
-let dbUser = dbUrl.username;
-let dbPass = dbUrl.password;
-let dbHost = dbUrl.hostname;
-let dbPort = dbUrl.port || 5432;
-let dbName = dbUrl.pathname.split('/')[1];
+function getDbCredentials() {
+  const dbUrlStr = process.env.DATABASE_URL;
+  if (!dbUrlStr) {
+    throw new Error('DATABASE_URL is not defined in environment variables');
+  }
 
-if (!dbUser || !dbName) {
-  throw new Error('Could not parse database credentials from DATABASE_URL');
+  try {
+    const dbUrl = new URL(dbUrlStr);
+    const dbUser = dbUrl.username;
+    const dbPass = dbUrl.password;
+    const dbHost = dbUrl.hostname;
+    const dbPort = dbUrl.port || 5432;
+    const dbName = dbUrl.pathname ? dbUrl.pathname.split('/')[1] : null;
+
+    if (!dbUser || !dbName) {
+      throw new Error('Could not parse username or database name from DATABASE_URL');
+    }
+
+    return { dbUser, dbPass, dbHost, dbPort, dbName };
+  } catch (err) {
+    throw new Error(`Invalid DATABASE_URL format: ${err.message}`);
+  }
 }
 
 const BACKUP_DIR = path.join(__dirname, '../../backups');
@@ -68,6 +78,7 @@ async function uploadToDrive(filePath, fileName) {
 }
 
 async function performBackup() {
+  const { dbUser, dbPass, dbHost, dbPort, dbName } = getDbCredentials();
   const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
   const fileName = `backup-${dbName}-${dateStr}.sql`;
   const filePath = path.join(BACKUP_DIR, fileName);
@@ -82,7 +93,7 @@ async function performBackup() {
     execFile('pg_dump', args, { env }, async (error, stdout, stderr) => {
       if (error) {
         console.error('Backup failed:', error.message);
-        return reject(error);
+        return reject(new Error(`pg_dump failed: ${error.message}`));
       }
       console.log('Backup generated locally at', filePath);
       
@@ -115,22 +126,30 @@ function cleanupLocalBackups(retentionDays) {
   });
 }
 
-async function performRestore(filePath) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error('Backup file not found locally.');
+async function performRestore(inputPath) {
+  const { dbUser, dbPass, dbHost, dbPort, dbName } = getDbCredentials();
+
+  // Support both full path or filename inside BACKUP_DIR, preventing path traversal
+  const safeFilename = path.basename(inputPath);
+  const resolvedPath = path.isAbsolute(inputPath) && fs.existsSync(inputPath)
+    ? inputPath
+    : path.join(BACKUP_DIR, safeFilename);
+
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Backup file not found locally: ${safeFilename}`);
   }
   
   const env = { ...process.env, PGPASSWORD: dbPass };
-  const args = ['-h', dbHost, '-p', String(dbPort), '-U', dbUser, '-d', dbName, '-f', filePath];
+  const args = ['-h', dbHost, '-p', String(dbPort), '-U', dbUser, '-d', dbName, '-f', resolvedPath];
 
   return new Promise((resolve, reject) => {
     execFile('psql', args, { env }, (error, stdout, stderr) => {
       if (error) {
         console.error('Restore failed:', error.message);
-        return reject(error);
+        return reject(new Error(`Restore execution failed: ${error.message}`));
       }
-      console.log('Restore completed.');
-      resolve();
+      console.log('Restore completed successfully for', safeFilename);
+      resolve({ success: true, file: safeFilename });
     });
   });
 }

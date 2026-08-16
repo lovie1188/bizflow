@@ -337,6 +337,66 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- ── Feature Catalog: master list, shared across all clients ──────
+      CREATE TABLE IF NOT EXISTS feature_catalog (
+        id                     SERIAL PRIMARY KEY,
+        key                    VARCHAR(50) UNIQUE NOT NULL,
+        name                   VARCHAR(100) NOT NULL,
+        category               VARCHAR(20) NOT NULL DEFAULT 'feature',
+        description            TEXT,
+        default_hours          DECIMAL(6,1) DEFAULT 0,
+        complexity             VARCHAR(10)  DEFAULT 'medium',
+        hourly_rate            DECIMAL(8,2) DEFAULT 400,
+        billing_type           VARCHAR(30)  DEFAULT 'one_time',
+        recurring_monthly_cost DECIMAL(10,2) DEFAULT 0,
+        gates_route            VARCHAR(255),
+        display_order          INT DEFAULT 99,
+        is_active              BOOLEAN DEFAULT true
+      );
+
+      -- ── Client Features: per-company toggles + override pricing ──────
+      CREATE TABLE IF NOT EXISTS client_features (
+        id             SERIAL PRIMARY KEY,
+        company_id     INT REFERENCES companies(id) ON DELETE CASCADE,
+        feature_key    VARCHAR(50) NOT NULL,
+        enabled        BOOLEAN DEFAULT true,
+        override_price DECIMAL(10,2),
+        billing_status VARCHAR(20) DEFAULT 'charged',
+        notes          TEXT,
+        updated_at     TIMESTAMP DEFAULT NOW(),
+        updated_by     INT REFERENCES users(id),
+        UNIQUE(company_id, feature_key)
+      );
+
+      -- ── Feature Catalog seed data ─────────────────────────────────────
+      INSERT INTO feature_catalog
+        (key, name, category, description, default_hours, complexity, hourly_rate, billing_type, recurring_monthly_cost, display_order)
+      VALUES
+        ('auth_roles',       'Auth + Role-based Login',         'feature',        'Admin, Buyer, Delivery, Developer roles with JWT',                 10,  'medium',  400, 'one_time',                  0,   1),
+        ('product_catalog',  'Product Catalog + Search',        'feature',        'Browse, filter, search products with categories',                   8,  'simple',  400, 'one_time',                  0,   2),
+        ('cart_checkout',    'Cart + Checkout Flow',            'feature',        'Add to cart, T&C digital sign, place order',                       12,  'medium',  400, 'one_time',                  0,   3),
+        ('gst_invoicing',    'GST-Compliant Invoicing',         'feature',        'CGST/SGST/IGST line-item split, Tax Invoice HTML',                 15,  'complex', 400, 'one_time',                  0,   4),
+        ('po_pdf',           'Purchase Order PDF',              'feature',        'Auto-generated PO HTML on every order',                             6,  'medium',  400, 'one_time',                  0,   5),
+        ('msme_compliance',  'MSME 45-day Compliance Engine',   'feature',        'Aging buckets, 19.5% interest calc, Section 43B(h) alerts',        10,  'complex', 400, 'one_time',                  0,   6),
+        ('credit_limit',     'Credit Limit Management',         'feature',        'Per-buyer credit tracking, enforcement, release on payment',         8,  'medium',  400, 'one_time',                  0,   7),
+        ('delivery_track',   'Delivery Tracking Dashboard',     'feature',        'Staff dispatch/delivered status with tracking timeline',             8,  'medium',  400, 'one_time',                  0,   8),
+        ('admin_settings',   'Admin Settings + Bank Accounts',  'feature',        'Company profile, GSTIN, bank CRUD, compliance settings',            5,  'simple',  400, 'one_time',                  0,   9),
+        ('buyer_onboard',    'Buyer Registration + Approval',   'feature',        'Self-register, MSME agreement upload, grace period, IDOR checks',   8,  'medium',  400, 'one_time',                  0,  10),
+        ('audit_dpdp',       'Audit Logs + DPDP Consent',       'feature',        'DPDP Act consent records, system-wide audit trail',                 8,  'medium',  400, 'one_time',                  0,  11),
+        ('developer_dash',   'Developer Dashboard',             'feature',        'Backups, export, subscriptions, feature flags, system logs',        12,  'complex', 400, 'one_time',                  0,  12),
+        ('razorpay',         'Razorpay Payment Gateway',        'infrastructure', 'Online payments via UPI/cards/netbanking/wallets',                  10,  'complex', 400, 'recurring_monthly',        999,  13),
+        ('hosting_backend',  'Backend Hosting (Render)',        'infrastructure', 'Node.js API server — free tier to start',                            0,  'simple',  0,   'recurring_monthly',          0,  14),
+        ('hosting_frontend', 'Frontend Hosting (Vercel)',       'infrastructure', 'React static site — free tier',                                      0,  'simple',  0,   'recurring_monthly',          0,  15),
+        ('database_neon',    'Database (Neon PostgreSQL)',      'infrastructure', 'Managed cloud PostgreSQL — free tier',                               0,  'simple',  0,   'recurring_monthly',          0,  16),
+        ('domain_ssl',       'Domain + SSL Certificate',       'infrastructure', 'Annual domain renewal (.in domain)',                                  0,  'simple',  0,   'recurring_yearly',         800,  17),
+        ('google_drive',     'Google Drive Storage',           'infrastructure', 'Agreement and document file storage',                                6,  'medium',  400, 'recurring_monthly',          0,  18),
+        ('email_sendgrid',   'Email Notifications (SendGrid)', 'infrastructure', 'Transactional email — free tier 100/day',                            6,  'medium',  400, 'recurring_monthly',          0,  19),
+        ('whatsapp_notif',   'WhatsApp Notifications',         'infrastructure', 'WhatsApp Business API alerts for invoices/reminders',                6,  'medium',  400, 'recurring_monthly',        499,  20),
+        ('sms_alerts',       'SMS Alerts',                    'infrastructure', 'SMS for invoice/payment/overdue notifications',                       4,  'simple',  400, 'recurring_monthly',        299,  21),
+        ('razorpay_txn_fee', 'Razorpay Transaction Fee',      'infrastructure', '~2% per transaction — passed through at cost',                       0,  'simple',  0,   'percentage_per_transaction', 0,  22),
+        ('amc',              'Annual Maintenance Contract',   'maintenance',    '18% of one-time build cost — bug fixes, security patches, 2 hrs/month support', 0, 'simple', 0, 'recurring_yearly', 0, 23)
+      ON CONFLICT (key) DO NOTHING;
+
       CREATE INDEX IF NOT EXISTS idx_user_companies_company ON user_companies(company_id);
       CREATE INDEX IF NOT EXISTS idx_products_company ON products(company_id);
       CREATE INDEX IF NOT EXISTS idx_orders_company ON orders(company_id);
@@ -431,6 +491,7 @@ const settingsRoutes = require('./routes/settings');
 const subscriptionsRoutes = require('./routes/subscriptions');
 const exportRoutes = require('./routes/export'); // NEW
 const publicRoutes = require('./routes/public');
+const featureCatalogRoutes = require('./routes/featureCatalog');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -449,6 +510,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/subscriptions', subscriptionsRoutes);
 app.use('/api/developer', exportRoutes); // export routes: /api/developer/export, /api/developer/export/check
 app.use('/api/public', publicRoutes);
+app.use('/api/features', featureCatalogRoutes); // costing + feature toggle module
 
 // ============================================================
 // CRON JOBS

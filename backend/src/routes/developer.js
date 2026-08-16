@@ -5,26 +5,61 @@ const fs = require('fs');
 const { errorLogPath } = require('../utils/logger');
 const { verifyToken } = require('../middleware/auth');
 
-// Mock data for backups
-let backups = [
-  { file: 'backup_2026_06_16.sql', size: 1024 * 1024 * 15, date: new Date(Date.now() - 86400000).toISOString() },
-  { file: 'backup_2026_06_17.sql', size: 1024 * 1024 * 16, date: new Date().toISOString() }
-];
+const { performBackup, performRestore, getLocalBackups } = require('../services/backupService');
 
+// ── Real DB Backup Endpoints ─────────────────────────────────────
+
+// GET /api/developer/backups - List all actual backup files on disk
 router.get('/backups', verifyToken, (req, res) => {
   if (req.role !== 'developer') return res.status(403).json({ error: 'Access denied' });
-  res.json({ success: true, backups });
+  try {
+    const rawBackups = getLocalBackups();
+    // Normalize format for frontend: { file: filename, size: size, date: createdAt }
+    const backups = rawBackups.map(b => ({
+      file: b.filename,
+      filename: b.filename,
+      size: b.size,
+      date: b.createdAt
+    }));
+    res.json({ success: true, backups, data: backups });
+  } catch (err) {
+    res.status(500).json({ error: `Failed to retrieve backups: ${err.message}` });
+  }
 });
 
-router.post('/backups/create', verifyToken, (req, res) => {
+// POST /api/developer/backups/create - Trigger real pg_dump backup
+router.post('/backups/create', verifyToken, async (req, res) => {
   if (req.role !== 'developer') return res.status(403).json({ error: 'Access denied' });
-  backups.push({ file: `backup_${new Date().getTime()}.sql`, size: 1024 * 1024 * 16, date: new Date().toISOString() });
-  res.json({ success: true, message: 'Backup created' });
+  try {
+    const filePath = await performBackup();
+    const filename = require('path').basename(filePath);
+    res.json({ 
+      success: true, 
+      message: `Real backup created successfully: ${filename}`,
+      file: filename
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Backup creation failed: ${err.message}` });
+  }
 });
 
-router.post('/backups/restore', verifyToken, (req, res) => {
+// POST /api/developer/backups/restore - Trigger real psql restore from file
+router.post('/backups/restore', verifyToken, async (req, res) => {
   if (req.role !== 'developer') return res.status(403).json({ error: 'Access denied' });
-  res.json({ success: true, message: 'Database restored successfully (MOCK)' });
+  const targetFile = req.body.filePath || req.body.file || req.body.filename;
+  if (!targetFile) {
+    return res.status(400).json({ error: 'filePath or filename is required for restore' });
+  }
+
+  try {
+    const result = await performRestore(targetFile);
+    res.json({ 
+      success: true, 
+      message: `Database restored successfully from ${result.file}` 
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Database restore failed: ${err.message}` });
+  }
 });
 
 router.get('/logs', verifyToken, (req, res) => {

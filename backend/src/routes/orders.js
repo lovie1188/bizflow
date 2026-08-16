@@ -100,7 +100,7 @@ router.post('/', verifyToken, validateRequest(orderSchema), async (req, res) => 
     const order = orderResult.rows[0];
     const orderId = order.id;
 
-    // Insert items & deduct stock
+    // Insert items & atomically deduct stock (M-1: race condition prevention)
     for (const item of verifiedItems) {
       const itemAmount = item.qty * item.unitPrice;
       const itemGst = itemAmount * (item.gstRate / 100);
@@ -112,29 +112,33 @@ router.post('/', verifyToken, validateRequest(orderSchema), async (req, res) => 
         [orderId, item.productId, item.qty, item.unitPrice, item.gstRate, item.hsnCode, itemAmount, itemGst, itemTotal]
       );
 
-      await pool.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.qty, item.productId]);
+      // Atomic stock deduction — WHERE stock >= qty prevents negative stock under concurrent orders
+      const deductRes = await pool.query(
+        'UPDATE products SET stock = stock - $1 WHERE id = $2 AND stock >= $1 RETURNING stock, name, min_order_qty',
+        [item.qty, item.productId]
+      );
+      if (deductRes.rows.length === 0) {
+        throw new Error(`Insufficient stock for product ID ${item.productId}. It may have been purchased by another buyer. Please try again.`);
+      }
 
       // Low-stock alert — notify admin if stock falls below min_order_qty
-      const stockRes = await pool.query('SELECT name, stock, min_order_qty FROM products WHERE id = $1', [item.productId]);
-      if (stockRes.rows.length > 0) {
-        const p = stockRes.rows[0];
-        const remaining = (p.stock || 0) - item.qty;
-        const minQty = p.min_order_qty || 1;
-        if (remaining <= minQty) {
-          const { sendEmail } = require('../utils/notifications');
-          const companyRes = await pool.query('SELECT email, name FROM companies WHERE id = $1', [companyId]);
-          if (companyRes.rows[0]?.email) {
-            const emailHtml = `
-              <div style="font-family:Arial,sans-serif;padding:16px;max-width:500px;border:2px solid #f59e0b;border-radius:8px;">
-                <h3 style="color:#d97706;margin:0 0 8px;">⚠️ Low Stock Alert</h3>
-                <p><strong>${p.name}</strong> has only <strong>${remaining} units</strong> remaining in stock.</p>
-                <p>Minimum Order Quantity: ${minQty}</p>
-                <p>Please restock to avoid order fulfillment issues.</p>
-                <p style="color:#888;font-size:12px;">— BizFlow Auto Alert</p>
-              </div>`;
-            sendEmail(companyRes.rows[0].email, `⚠️ Low Stock: ${p.name} (${remaining} units left)`, emailHtml)
-              .catch(e => console.error('[Low Stock Alert] Email failed:', e.message));
-          }
+      const p = deductRes.rows[0];
+      const remaining = p.stock;
+      const minQty = p.min_order_qty || 1;
+      if (remaining <= minQty) {
+        const { sendEmail } = require('../utils/notifications');
+        const companyRes = await pool.query('SELECT email, name FROM companies WHERE id = $1', [companyId]);
+        if (companyRes.rows[0]?.email) {
+          const emailHtml = `
+            <div style="font-family:Arial,sans-serif;padding:16px;max-width:500px;border:2px solid #f59e0b;border-radius:8px;">
+              <h3 style="color:#d97706;margin:0 0 8px;">⚠️ Low Stock Alert</h3>
+              <p><strong>${p.name}</strong> has only <strong>${remaining} units</strong> remaining in stock.</p>
+              <p>Minimum Order Quantity: ${minQty}</p>
+              <p>Please restock to avoid order fulfillment issues.</p>
+              <p style="color:#888;font-size:12px;">— BizFlow Auto Alert</p>
+            </div>`;
+          sendEmail(companyRes.rows[0].email, `⚠️ Low Stock: ${p.name} (${remaining} units left)`, emailHtml)
+            .catch(e => console.error('[Low Stock Alert] Email failed:', e.message));
         }
       }
     }
@@ -347,15 +351,21 @@ router.get('/', verifyToken, async (req, res) => {
 router.put('/:id/status', verifyToken, requireRole('admin'), async (req, res) => {
   const { status } = req.body;
   try {
+    // M-2: Wrap all status-change side effects in a transaction to prevent partial state
+    await pool.query('BEGIN');
+
     const orderRes = await pool.query(
       'SELECT status, grand_total, buyer_entity_id FROM orders WHERE id = $1 AND company_id = $2',
       [req.params.id, req.companyId]
     );
-    if (orderRes.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    if (orderRes.rows.length === 0) {
+      await pool.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
     const order = orderRes.rows[0];
 
     if (['rejected', 'cancelled'].includes(status) && !['rejected', 'cancelled'].includes(order.status)) {
-      await pool.query('UPDATE buyers SET used_credit = used_credit - $1 WHERE id = $2', [order.grand_total, order.buyer_entity_id]);
+      await pool.query('UPDATE buyers SET used_credit = GREATEST(used_credit - $1, 0) WHERE id = $2', [order.grand_total, order.buyer_entity_id]);
       const itemsRes = await pool.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [req.params.id]);
       for (const item of itemsRes.rows) {
         await pool.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [item.qty, item.product_id]);
@@ -366,8 +376,11 @@ router.put('/:id/status', verifyToken, requireRole('admin'), async (req, res) =>
       'UPDATE orders SET status = $1 WHERE id = $2 AND company_id = $3 RETURNING *',
       [status, req.params.id, req.companyId]
     );
+
+    await pool.query('COMMIT');
     res.json(result.rows[0]);
   } catch (err) {
+    await pool.query('ROLLBACK');
     res.status(500).json({ error: err.message });
   }
 });

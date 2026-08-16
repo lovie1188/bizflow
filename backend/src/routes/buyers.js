@@ -135,14 +135,9 @@ router.get('/:id/generate-agreement', verifyToken, async (req, res) => {
 const multer = require('multer');
 const path = require('path');
 
-// M-8: File type whitelist and size limit for agreement uploads
-const ALLOWED_AGREEMENT_MIMETYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-];
+// M-8: Only PDF allowed for agreements — images can't represent multi-page docs,
+// and Word files can be edited after signing (legally unsafe)
+const ALLOWED_AGREEMENT_MIMETYPES = ['application/pdf'];
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -152,7 +147,7 @@ const upload = multer({
     if (ALLOWED_AGREEMENT_MIMETYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF, JPEG, PNG, DOC, and DOCX files are allowed.'), false);
+      cb(new Error('Only PDF files are accepted for agreements. Images and Word documents are not allowed.'), false);
     }
   }
 });

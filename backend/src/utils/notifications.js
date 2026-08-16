@@ -31,11 +31,23 @@ const getTransporter = () => {
   return transporter;
 };
 
+// L-3: Mask PII in logs — show only enough to identify without full exposure
+const maskEmail = (email) => {
+  if (!email || !email.includes('@')) return '***';
+  const [local, domain] = email.split('@');
+  return `${local.slice(0, 2)}***@${domain}`;
+};
+const maskPhone = (phone) => {
+  if (!phone) return '***';
+  const s = String(phone);
+  return s.slice(0, 3) + 'XXXXX' + s.slice(-2);
+};
+
 const sendEmail = async (to, subject, htmlContent) => {
   const t = getTransporter();
   if (!t) {
     // Graceful degradation — log only, don't crash
-    console.log(`[EMAIL STUB] To: ${to} | Subject: ${subject}`);
+    console.log(`[EMAIL STUB] To: ${maskEmail(to)} | Subject: ${subject}`);
     return false;
   }
 
@@ -46,10 +58,10 @@ const sendEmail = async (to, subject, htmlContent) => {
       subject,
       html: htmlContent,
     });
-    console.log(`[EMAIL SENT] To: ${to} | Subject: ${subject} | MessageId: ${info.messageId}`);
+    console.log(`[EMAIL SENT] To: ${maskEmail(to)} | Subject: ${subject} | MessageId: ${info.messageId}`);
     return true;
   } catch (err) {
-    console.error(`[EMAIL ERROR] Failed to send to ${to}:`, err.message);
+    console.error(`[EMAIL ERROR] Failed to send to ${maskEmail(to)}:`, err.message);
     return false;
   }
 };
@@ -58,7 +70,7 @@ const sendEmail = async (to, subject, htmlContent) => {
 // To enable: set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM in .env
 const sendWhatsApp = async (phone, message) => {
   if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-    console.log(`[WHATSAPP STUB] To: ${phone} | Message: ${message.substring(0, 50)}...`);
+    console.log(`[WHATSAPP STUB] To: ${maskPhone(phone)} | Message: ${message.substring(0, 50)}...`);
     return false;
   }
   try {
@@ -68,10 +80,10 @@ const sendWhatsApp = async (phone, message) => {
       to: `whatsapp:${phone}`,
       body: message,
     });
-    console.log(`[WHATSAPP SENT] To: ${phone} | SID: ${msg.sid}`);
+    console.log(`[WHATSAPP SENT] To: ${maskPhone(phone)} | SID: ${msg.sid}`);
     return true;
   } catch (err) {
-    console.error(`[WHATSAPP ERROR] Failed to send to ${phone}:`, err.message);
+    console.error(`[WHATSAPP ERROR] Failed to send to ${maskPhone(phone)}:`, err.message);
     return false;
   }
 };

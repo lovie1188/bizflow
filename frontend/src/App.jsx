@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary'; // L-5: global error boundary
 
 // Layouts
 import ShopLayout  from './components/layouts/ShopLayout';
@@ -48,9 +49,10 @@ function App() {
   const isCustomDomain = hostname !== 'localhost' && !hostname.includes('bizflow.in');
 
   return (
-    <AuthProvider>
-      <CartProvider>
-        <ToastProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <CartProvider>
+          <ToastProvider>
           <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
 
@@ -150,6 +152,7 @@ function App() {
         </ToastProvider>
       </CartProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

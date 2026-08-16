@@ -42,7 +42,15 @@ const app = express();
 // MIDDLEWARE
 // ============================================================
 app.use(helmet({
-  crossOriginResourcePolicy: false,
+  // L-7: Explicit security headers
+  noSniff: true,                           // X-Content-Type-Options: nosniff
+  xssFilter: true,                         // X-XSS-Protection (legacy browsers)
+  frameguard: { action: 'sameorigin' },    // X-Frame-Options: SAMEORIGIN
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  crossOriginResourcePolicy: { policy: 'same-site' }, // Restore with safe value instead of false
+  hsts: process.env.NODE_ENV === 'production'
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -50,7 +58,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "https://api.razorpay.com", process.env.CORS_ORIGIN || "*"],
+      connectSrc: ["'self'", "https://api.razorpay.com", ...(process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean)],
       frameSrc: ["'self'", "https://api.razorpay.com"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
@@ -80,11 +88,11 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], // L-2: added PATCH for partial update endpoints
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' })); // L-8: Reduced from 10mb — 1MB is ample for all API payloads
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,

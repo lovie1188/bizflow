@@ -62,7 +62,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { userId, role: 'admin', companyId },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN_ADMIN || '7d' } // L-1: shorter expiry for privileged roles
     );
     
     // Explicitly attach userId to req for logging
@@ -124,7 +124,7 @@ router.post('/register-buyer', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { userId, role: 'buyer', companyId: supplierId, buyerEntityId },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN_BUYER || '14d' } // L-1: buyers get longer session for UX
     );
 
     res.json({ 
@@ -183,10 +183,14 @@ router.post('/login', authLimiter, async (req, res) => {
       }
     }
 
+    const isBuyer = (user.company_role || user.role) === 'buyer';
     const token = jwt.sign(
       { userId: user.id, role: user.company_role || user.role, companyId: user.company_id, buyerEntityId },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      // L-1: Role-aware expiry — buyers get longer session; admins/staff shorter for security
+      { expiresIn: isBuyer
+          ? (process.env.JWT_EXPIRES_IN_BUYER || '14d')
+          : (process.env.JWT_EXPIRES_IN_ADMIN || '7d') }
     );
     
     req.userId = user.id;

@@ -78,9 +78,16 @@ const BuyerOrders = () => {
           <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Track your wholesale orders and shipments.</p>
 
           {loading ? (
-            <p>Loading orders...</p>
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div className="spinner spinner-lg" />
+              <span>Loading your orders…</span>
+            </div>
           ) : orders.length === 0 ? (
-            <p>No orders found.</p>
+            <div className="glass-panel" style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+              <Package size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+              <h3 style={{ margin: '0 0 6px', color: 'var(--text-main)' }}>No orders found</h3>
+              <p style={{ margin: 0 }}>You have not placed any wholesale orders yet.</p>
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {orders.map(o => (

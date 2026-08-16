@@ -26,8 +26,28 @@ const OrderDetails = () => {
     }
   }, [id, order, navigate]);
 
-  if (loading) return <div className="container flex-center">Loading order details...</div>;
-  if (!order) return <div className="container flex-center">Order not found.</div>;
+  if (loading) {
+    return (
+      <div className="container" style={{ padding: '60px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
+        <div className="spinner spinner-lg" />
+        <span>Loading order details…</span>
+      </div>
+    );
+  }
+  if (!order) {
+    return (
+      <div className="container" style={{ padding: '60px 24px', textAlign: 'center' }}>
+        <div className="glass-panel" style={{ padding: '40px', maxWidth: '450px', margin: '0 auto' }}>
+          <AlertTriangle size={40} style={{ color: 'var(--color-warning)', margin: '0 auto 12px' }} />
+          <h3 style={{ margin: '0 0 8px' }}>Order Not Found</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>The requested order could not be located.</p>
+          <Link to="/shop/orders" className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}>
+            <ArrowLeft size={16} /> Back to My Orders
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // Delivery & Return Logic
   const isDelivered = order.status === 'delivered';

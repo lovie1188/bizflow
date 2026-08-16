@@ -74,8 +74,10 @@ app.use(express.json({ limit: '10mb' }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 2000,
-  message: 'Too many requests, please try again later.'
+  max: 300, // M-4: Reduced from 2000 — 300 req/15min is still generous for legitimate use
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
 

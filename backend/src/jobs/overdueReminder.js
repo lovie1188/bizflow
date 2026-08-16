@@ -118,14 +118,22 @@ const runOverdueCheck = async () => {
       // Only send if we matched a trigger day
       if (urgency && (inv.buyer_email || inv.buyer_phone)) {
         try {
+          // M-3: Idempotency check — skip if this day_trigger was already sent for this invoice
+          const alreadySent = await pool.query(
+            `SELECT id FROM notifications WHERE invoice_id = $1 AND day_trigger = $2 AND status = 'sent' LIMIT 1`,
+            [inv.id, daysElapsed]
+          );
+          if (alreadySent.rows.length > 0) {
+            continue; // Already sent for this trigger day — skip
+          }
+
           if (inv.buyer_email) await sendEmail(inv.buyer_email, emailSubject, emailHtml);
           if (inv.buyer_phone) await sendWhatsApp(inv.buyer_phone, waMsg);
 
           // Log notification to DB
           await pool.query(
             `INSERT INTO notifications (company_id, invoice_id, type, day_trigger, sent_at, status)
-             VALUES ($1, $2, $3, $4, NOW(), 'sent')
-             ON CONFLICT DO NOTHING`,
+             VALUES ($1, $2, $3, $4, NOW(), 'sent')`,
             [inv.company_id, inv.id, `overdue_${urgency.toLowerCase()}`, daysElapsed]
           );
           sent++;

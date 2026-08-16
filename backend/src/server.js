@@ -79,6 +79,12 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .map(o => o.trim())
   .filter(Boolean);
 
+// Safety guard — prevent accidental open CORS in production
+if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+  console.error('[FATAL] CORS_ORIGIN env variable is not set in production. Server cannot start safely.');
+  process.exit(1);
+}
+
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow server-to-server requests (no origin header) and whitelisted origins

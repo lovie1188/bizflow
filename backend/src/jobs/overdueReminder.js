@@ -30,16 +30,17 @@ const runOverdueCheck = async () => {
       LEFT JOIN buyers  b ON i.buyer_entity_id = b.id
       LEFT JOIN companies c ON i.company_id    = c.id
       WHERE i.paid = false
-        AND i.created_at <= NOW() - INTERVAL '30 days'
-      ORDER BY i.created_at ASC
+        AND i.due_date IS NOT NULL
+        AND i.due_date <= NOW() - INTERVAL '30 days'
+      ORDER BY i.due_date ASC
     `);
 
     const today = new Date();
     let sent = 0;
 
     for (const inv of result.rows) {
-      const createdAt  = new Date(inv.created_at);
-      const daysElapsed = Math.floor((today - createdAt) / (1000 * 60 * 60 * 24));
+      // MSMED Act: 45-day window runs from due_date (acceptance date), not invoice creation
+      const daysElapsed = Math.floor((today - new Date(inv.due_date)) / (1000 * 60 * 60 * 24));
       const amount     = parseFloat(inv.amount || 0);
       const interest   = calcInterest(amount, daysElapsed);
       const fmtAmt     = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2 });

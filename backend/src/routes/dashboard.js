@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const pool = require('../utils/db');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
@@ -50,12 +50,13 @@ router.get('/', verifyToken, async (req, res) => {
     const today = new Date();
     let aging = { safe: 0, monitor: 0, warning: 0, critical: 0 };
     invoices.forEach(inv => {
-      const created = new Date(inv.created_at);
-      const days = Math.floor((today - created) / (1000 * 60 * 60 * 24));
+      // MSMED Act: 45-day clock runs from due_date (acceptance date), not invoice creation date
+      const reference = inv.due_date ? new Date(inv.due_date) : new Date(inv.created_at);
+      const days = Math.floor((today - reference) / (1000 * 60 * 60 * 24));
       const amt = parseFloat(inv.amount || 0);
-      if (days <= 15) aging.safe += amt;
-      else if (days <= 30) aging.monitor += amt;
-      else if (days <= 44) aging.warning += amt;
+      if (days <= 0)  aging.safe += amt;      // not yet due
+      else if (days <= 15) aging.monitor += amt;
+      else if (days <= 30) aging.warning += amt;
       else aging.critical += amt;
     });
 

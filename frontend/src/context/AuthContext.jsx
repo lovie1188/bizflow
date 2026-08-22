@@ -32,6 +32,27 @@ export const AuthProvider = ({ children }) => {
   const needsSetup     = isSupplier && company && !company.setup_complete;
   const homeRoute      = ROLE_HOME[role] || '/shop';
 
+  // ── Startup token validation ─────────────────────────────────
+  // On app load, verify any stored token is still valid.
+  // If the server returns 401 (expired or password was reset), silently
+  // clear localStorage so the user sees /login cleanly instead of a
+  // confusing 401 error loop in the browser console.
+  useEffect(() => {
+    const storedToken = localStorage.getItem('bizflow_token');
+    if (!storedToken) return;
+
+    fetchApi('/auth/verify').catch((err) => {
+      const msg = (err.message || '').toLowerCase();
+      if (msg.includes('invalid') || msg.includes('expired') || msg.includes('unauthorized') || msg.includes('token')) {
+        clearAuth();
+        setUser(null);
+        setCompany(null);
+      }
+      // On network/server errors, keep session alive (don't log out for transient failures)
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Login ────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
     setLoading(true);

@@ -252,5 +252,14 @@ router.post('/logout', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router;
 
+// ── GET /auth/verify ──────────────────────────────────────────────────────
+// Lightweight token check called by frontend on startup.
+// Returns 200 if the JWT is valid, 401 if expired/invalid.
+// Used to silently clear stale localStorage sessions without a full login.
+const { verifyToken: verifyTokenMiddleware } = require('../middleware/auth');
+router.get('/verify', verifyTokenMiddleware, (req, res) => {
+  res.json({ valid: true, userId: req.userId, role: req.role });
+});
+
+module.exports = router;

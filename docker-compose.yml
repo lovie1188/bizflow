@@ -1,24 +1,81 @@
+# ── BizFlow Docker Compose — Production Deployment ────────────────────────
+#
+# Services:  backend (Node.js API)  +  frontend (React via Nginx)
+# Database:  Neon PostgreSQL (cloud) — no local DB container needed
+#
+# Usage:
+#   1. Copy backend/.env.example → backend/.env and fill in real values
+#   2. docker compose up --build -d
+#   3. App available at:
+#        Frontend → http://localhost:3000
+#        Backend  → http://localhost:5000
+#
+# ─────────────────────────────────────────────────────────────────────────
+
 version: '3.8'
+
 services:
-  postgres:
-    image: postgres:15
-    container_name: bizflow_postgres
+
+  # ── Backend: Node.js / Express API ──────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bizflow_backend
+    restart: unless-stopped
+
+    # All secrets come from backend/.env — never hardcode here
+    env_file:
+      - ./backend/.env
+
+    # Override specific vars for production container environment
     environment:
-      # M-9: Never hardcode DB passwords — set POSTGRES_PASSWORD in your shell or .env file
-      # e.g., export POSTGRES_PASSWORD=YourStr0ngPassword! before running docker-compose up
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD env var is required. Set it before running docker-compose.}
-      POSTGRES_DB: ${POSTGRES_DB:-bizflow_dev}
-      POSTGRES_USER: ${POSTGRES_USER:-bizflow}
+      NODE_ENV: production
+      PORT: 5000
+
     ports:
-      - "5432:5432"
+      - "5000:5000"
+
+    # Mount Google service account JSON as a read-only volume
+    # (keep the file out of the image; never commit it to git)
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-  redis:
-    image: redis:7
-    container_name: bizflow_redis
-    command: >
-      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then redis-server --requirepass "$$REDIS_PASSWORD"; else redis-server; fi'
+      - ./backend/google-service-account.json:/app/google-service-account.json:ro
+      - bizflow_backups:/app/backups
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/settings/public"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  # ── Frontend: React app served by Nginx ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the React JS bundle at build time
+        # Change this to your production domain when deploying
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5000}
+    container_name: bizflow_frontend
+    restart: unless-stopped
+
     ports:
-      - "6379:6379"
+      - "3000:80"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+# ── Named Volumes ─────────────────────────────────────────────────────────
 volumes:
-  postgres_data:
+  bizflow_backups:
+    # Persists database backup files across container restarts

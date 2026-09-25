@@ -19,6 +19,8 @@ import OrderDetails         from './pages/shop/OrderDetails';
 import BuyerInvoices        from './pages/shop/BuyerInvoices';
 import BuyerProfile         from './pages/shop/BuyerProfile';
 import BuyerPurchaseOrders  from './pages/shop/BuyerPurchaseOrders';
+import ForgotPassword       from './pages/shop/ForgotPassword';
+import ResetPassword        from './pages/shop/ResetPassword';
 
 // Public Pages — no longer needed; ShopHome handles public mode via useParams
 // import PublicStore from './pages/public/PublicStore';
@@ -71,6 +73,19 @@ function App() {
               <Route path="/store/:storeName" element={<ShopLayout />}>
                 <Route index element={<ShopHome />} />
                 <Route path="register" element={<BuyerRegister />} />
+              </Route>
+
+              {/* Standalone Buyer Register — accessible from Login page */}
+              <Route path="/buyer-register" element={<ShopLayout />}>
+                <Route index element={<BuyerRegister />} />
+              </Route>
+
+              {/* ─── Forgot / Reset Password (public, no auth required) ─── */}
+              <Route path="/forgot-password" element={<ShopLayout />}>
+                <Route index element={<ForgotPassword />} />
+              </Route>
+              <Route path="/reset-password" element={<ShopLayout />}>
+                <Route index element={<ResetPassword />} />
               </Route>
 
               {/* ─── Login (publicOnly: logged-in users auto-redirected to their home) ─── */}

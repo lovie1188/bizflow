@@ -262,4 +262,105 @@ router.get('/verify', verifyTokenMiddleware, (req, res) => {
   res.json({ valid: true, userId: req.userId, role: req.role });
 });
 
+// ── POST /auth/forgot-password ────────────────────────────────────────────
+// Accepts email, generates a 1-hour reset token, sends it via email.
+// Always returns 200 to prevent email enumeration.
+router.post('/forgot-password', authLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+  try {
+    const userRes = await pool.query('SELECT id, name, email FROM users WHERE email = $1 AND active = true', [email]);
+
+    if (userRes.rows.length > 0) {
+      const user = userRes.rows[0];
+      const crypto = require('crypto');
+      const token  = crypto.randomBytes(32).toString('hex');
+      const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Store token in password_reset_tokens table (created by migration below)
+      await pool.query(
+        `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3, used = false`,
+        [user.id, token, expiry]
+      );
+
+      // Send email — gracefully skip if SMTP is not configured
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host:   process.env.EMAIL_HOST   || 'smtp.gmail.com',
+          port:   parseInt(process.env.EMAIL_PORT || '587'),
+          secure: false,
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+        });
+
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetLink   = `${frontendUrl}/reset-password?token=${token}`;
+
+        await transporter.sendMail({
+          from:    `"${process.env.EMAIL_FROM_NAME || 'BizFlow'}" <${process.env.EMAIL_USER}>`,
+          to:      user.email,
+          subject: 'BizFlow — Reset Your Password',
+          html: `
+            <div style="font-family:sans-serif;max-width:480px;margin:auto">
+              <h2>Password Reset Request</h2>
+              <p>Hi ${user.name},</p>
+              <p>Click the button below to reset your password. This link is valid for <strong>1 hour</strong>.</p>
+              <a href="${resetLink}" style="display:inline-block;padding:12px 24px;background:#02B290;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin:16px 0">Reset Password</a>
+              <p style="color:#666;font-size:13px">If you didn't request this, ignore this email. Your password won't change.</p>
+              <p style="color:#666;font-size:12px">Link: ${resetLink}</p>
+            </div>
+          `,
+        });
+      } catch (emailErr) {
+        // Log email failure but don't expose to client
+        console.error('[forgot-password] Email send failed:', emailErr.message);
+      }
+    }
+
+    // Always return success — prevents email enumeration
+    res.json({ success: true, message: 'If an account with that email exists, a reset link has been sent.' });
+  } catch (err) {
+    console.error('[forgot-password] Error:', err.message);
+    res.status(500).json({ error: 'An error occurred. Please try again.' });
+  }
+});
+
+// ── POST /auth/reset-password ─────────────────────────────────────────────
+// Accepts token + new password, validates token, updates password.
+router.post('/reset-password', authLimiter, async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Token and password are required.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+
+  try {
+    const tokenRes = await pool.query(
+      `SELECT prt.*, u.id AS uid FROM password_reset_tokens prt
+       JOIN users u ON u.id = prt.user_id
+       WHERE prt.token = $1 AND prt.used = false AND prt.expires_at > NOW()`,
+      [token]
+    );
+
+    if (tokenRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+    }
+
+    const { uid } = tokenRes.rows[0];
+    const hashed  = await bcrypt.hash(password, 10);
+
+    await pool.query('BEGIN');
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, uid]);
+    await pool.query('UPDATE password_reset_tokens SET used = true WHERE token = $1', [token]);
+    await pool.query('COMMIT');
+
+    res.json({ success: true, message: 'Password updated successfully. You can now log in.' });
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    console.error('[reset-password] Error:', err.message);
+    res.status(500).json({ error: 'An error occurred. Please try again.' });
+  }
+});
+
 module.exports = router;

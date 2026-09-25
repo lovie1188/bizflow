@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { IndianRupee, TrendingUp, AlertCircle, ShoppingBag, ArrowUpRight, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchApi } from '../../utils/api';
-import AdminStaff from './AdminStaff';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -50,13 +49,6 @@ const AdminDashboard = () => {
           <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>Dashboard Overview</h1>
           <p style={{ color: 'var(--text-muted)' }}>Welcome back, here's what's happening with your wholesale business today.</p>
         </div>
-        <button 
-          onClick={() => navigate('/admin/orders')}
-          className="btn-primary depth-3d-btn" 
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', border: 'none' }}
-        >
-          <ShoppingBag size={18} /> New Order
-        </button>
       </div>
 
       {/* KPI Cards */}
@@ -82,7 +74,7 @@ const AdminDashboard = () => {
         <div className="glass-panel" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <h2 style={{ fontSize: '18px' }}>Recent Orders</h2>
-            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>View All</button>
+            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => navigate('/admin/orders')}>View All</button>
           </div>
           
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -101,7 +93,7 @@ const AdminDashboard = () => {
               ) : data.orders.map((row, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '16px 0', fontWeight: 500 }}>{row.order_number}</td>
-                  <td style={{ padding: '16px 0', color: 'var(--text-muted)' }}>Buyer ID: {row.buyer_entity_id}</td>
+                  <td style={{ padding: '16px 0', color: 'var(--text-muted)' }}>{row.buyer_name || `Buyer #${row.buyer_entity_id}`}</td>
                   <td style={{ padding: '16px 0' }}>₹{parseFloat(row.grand_total || row.total_amount || 0).toLocaleString('en-IN')}</td>
                   <td style={{ padding: '16px 0' }}>
                     <span style={{ 

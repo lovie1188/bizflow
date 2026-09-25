@@ -124,6 +124,12 @@ const initDB = async () => {
         gstin VARCHAR(15) UNIQUE NOT NULL,
         email VARCHAR(255),
         phone VARCHAR(20),
+        address TEXT,
+        city VARCHAR(100),
+        state VARCHAR(100),
+        pincode VARCHAR(10),
+        invoice_prefix VARCHAR(20) DEFAULT 'INV',
+        setup_complete BOOLEAN DEFAULT false,
         plan VARCHAR(50) DEFAULT 'starter',
         active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -179,6 +185,7 @@ const initDB = async () => {
         company_id INT REFERENCES companies(id),
         sku VARCHAR(50),
         name VARCHAR(255),
+        description TEXT,
         hsn_code VARCHAR(10),
         gst_rate INT,
         unit VARCHAR(20),
@@ -188,6 +195,7 @@ const initDB = async () => {
         min_order_qty INT DEFAULT 1,
         image_url VARCHAR(255),
         category VARCHAR(100) DEFAULT 'Other',
+        brand VARCHAR(100),
         created_at TIMESTAMP DEFAULT NOW()
       );
 
@@ -428,6 +436,7 @@ const runMigrations = async () => {
   try {
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Other'`);
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(100)`);
+    await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT`);
     
     // Add used_credit to buyers
     await pool.query(`ALTER TABLE buyers ADD COLUMN IF NOT EXISTS used_credit DECIMAL(12,2) DEFAULT 0`);
@@ -464,6 +473,18 @@ const runMigrations = async () => {
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS msme_alert_days VARCHAR(100) DEFAULT '45 Days — MSME Protected'`);
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS setup_complete BOOLEAN DEFAULT false`);
     await pool.query(`ALTER TABLE buyers   ADD COLUMN IF NOT EXISTS msme_no VARCHAR(100)`);
+
+    // ── Forgot-password token table ─────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id         SERIAL PRIMARY KEY,
+        user_id    INT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        token      VARCHAR(128) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used       BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
     console.log('Migrations applied');
   } catch (err) {

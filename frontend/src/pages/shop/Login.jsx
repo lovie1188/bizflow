@@ -125,6 +125,13 @@ const Login = () => {
               </button>
             </div>
 
+            {/* Forgot Password */}
+            <div style={{ textAlign: 'right', marginTop: '-6px' }}>
+              <Link to="/forgot-password" style={{ fontSize: '0.82rem', color: 'var(--color-brand)' }}>
+                Forgot Password?
+              </Link>
+            </div>
+
             {/* Submit */}
             <button
               type="submit"
@@ -148,7 +155,7 @@ const Login = () => {
           }}>
             <p style={{ fontSize: '0.875rem', margin: 0 }}>
               New Buyer?{' '}
-              <Link to="/shop/register" style={{ color: 'var(--color-brand)', fontWeight: 600 }}>
+              <Link to="/buyer-register" style={{ color: 'var(--color-brand)', fontWeight: 600 }}>
                 Register your business
               </Link>
             </p>

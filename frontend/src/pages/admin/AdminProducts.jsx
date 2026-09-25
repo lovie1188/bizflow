@@ -27,12 +27,13 @@ const AdminProducts = () => {
 
   const categories = ['all', ...CATEGORIES];
 
-  const loadProducts = async (pageNum = 1) => {
+  const loadProducts = async (pageNum = 1, searchQuery = search) => {
     try {
       if (pageNum === 1) setFetching(true);
       else setLoadingMore(true);
 
-      const res = await fetchApi(`/products?page=${pageNum}&limit=20`);
+      const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
+      const res = await fetchApi(`/products?page=${pageNum}&limit=20${searchParam}`);
       const mapped = (res?.data || []).map(p => ({
         id: p.id,
         name: p.name,
@@ -70,7 +71,13 @@ const AdminProducts = () => {
     }
   };
 
-  useEffect(() => { loadProducts(1); }, []);
+  useEffect(() => { loadProducts(1); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When search changes: reset page and reload from backend
+  useEffect(() => {
+    setPage(1);
+    loadProducts(1, search);
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadMore = () => {
     const nextPage = page + 1;

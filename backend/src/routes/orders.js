@@ -307,24 +307,54 @@ router.put('/:id/delivery', verifyToken, requireRole('admin', 'staff', 'delivery
 // ─────────────────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page   = parseInt(req.query.page)  || 1;
+    const limit  = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
 
     const isAdminOrStaff = ['admin', 'staff', 'delivery'].includes(req.role);
 
-    const query = isAdminOrStaff
-      ? 'SELECT o.*, u.name as buyer_name FROM orders o LEFT JOIN users u ON o.buyer_id = u.id WHERE o.company_id = $1 ORDER BY o.created_at DESC LIMIT $2 OFFSET $3'
-      : 'SELECT o.*, u.name as buyer_name FROM orders o LEFT JOIN users u ON o.buyer_id = u.id WHERE o.buyer_entity_id = $1 ORDER BY o.created_at DESC LIMIT $2 OFFSET $3';
+    // Build parameterized query with optional search
+    let baseWhere, params, countParams;
 
-    const countQuery = isAdminOrStaff
-      ? 'SELECT COUNT(*) FROM orders WHERE company_id = $1'
-      : 'SELECT COUNT(*) FROM orders WHERE buyer_entity_id = $1';
+    if (isAdminOrStaff) {
+      if (search) {
+        baseWhere  = 'WHERE o.company_id = $1 AND (o.order_number ILIKE $2 OR u.name ILIKE $2)';
+        params     = [req.companyId, `%${search}%`, limit, offset];
+        countParams = [req.companyId, `%${search}%`];
+      } else {
+        baseWhere  = 'WHERE o.company_id = $1';
+        params     = [req.companyId, limit, offset];
+        countParams = [req.companyId];
+      }
+    } else {
+      if (search) {
+        baseWhere  = 'WHERE o.buyer_entity_id = $1 AND o.order_number ILIKE $2';
+        params     = [req.buyerEntityId, `%${search}%`, limit, offset];
+        countParams = [req.buyerEntityId, `%${search}%`];
+      } else {
+        baseWhere  = 'WHERE o.buyer_entity_id = $1';
+        params     = [req.buyerEntityId, limit, offset];
+        countParams = [req.buyerEntityId];
+      }
+    }
 
-    const params = isAdminOrStaff ? [req.companyId, limit, offset] : [req.buyerEntityId, limit, offset];
-    const countParams = isAdminOrStaff ? [req.companyId] : [req.buyerEntityId];
+    const limitIdx  = params.length - 1;
+    const offsetIdx = params.length;
+    const query = `SELECT o.*, u.name as buyer_name
+                   FROM orders o LEFT JOIN users u ON o.buyer_id = u.id
+                   ${baseWhere}
+                   ORDER BY o.created_at DESC
+                   LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
-    const dataResult = await pool.query(query, params);
+    const cntWhere = search
+      ? (isAdminOrStaff
+          ? 'WHERE o.company_id = $1 AND (o.order_number ILIKE $2 OR u.name ILIKE $2)'
+          : 'WHERE o.buyer_entity_id = $1 AND o.order_number ILIKE $2')
+      : (isAdminOrStaff ? 'WHERE o.company_id = $1' : 'WHERE o.buyer_entity_id = $1');
+    const countQuery = `SELECT COUNT(*) FROM orders o LEFT JOIN users u ON o.buyer_id = u.id ${cntWhere}`;
+
+    const dataResult  = await pool.query(query, params);
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
 

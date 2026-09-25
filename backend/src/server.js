@@ -1,25 +1,14 @@
 /**
- * BizFlow SaaS - Backend Server
- * Node.js + Express + PostgreSQL
- * Production-ready API for Web + Mobile
+ * BizFlow SaaS — Backend Server
+ * Node.js + Express + PostgreSQL (Neon)
+ * Production-ready API with JWT auth, Razorpay payments, Google Drive storage.
+ *
+ * Install: npm install
+ * Dev:     npm run dev
+ * Prod:    node src/server.js
+ *
+ * Env: copy backend/.env.example → backend/.env and fill in values.
  */
-
-// ============================================================
-// DEPENDENCIES (install via npm)
-// ============================================================
-/*
-npm init -y
-npm install express cors dotenv pg jsonwebtoken bcryptjs axios socket.io helmet rate-limit
-npm install --save-dev nodemon
-
-Create .env file:
-DATABASE_URL=postgresql://user:pass@localhost:5432/bizflow_saas
-JWT_SECRET=your-secret-key-min-32-chars
-PORT=5000
-NODE_ENV=development
-RAZORPAY_KEY=xxx
-RAZORPAY_SECRET=xxx
-*/
 
 const express = require('express');
 const cors = require('cors');

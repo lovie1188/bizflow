@@ -28,20 +28,38 @@ router.post('/', verifyToken, requireRole('admin'), validateRequest(buyerSchema)
 // GET BUYERS
 router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page   = parseInt(req.query.page)  || 1;
+    const limit  = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
 
-    const result = await pool.query('SELECT * FROM buyers WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [req.companyId, limit, offset]);
-    const countResult = await pool.query('SELECT COUNT(*) FROM buyers WHERE company_id = $1', [req.companyId]);
+    let query, countQuery, params, countParams;
+
+    if (search) {
+      query = `SELECT * FROM buyers
+               WHERE company_id = $1
+               AND (name ILIKE $2 OR gstin ILIKE $2 OR phone ILIKE $2 OR email ILIKE $2)
+               ORDER BY created_at DESC LIMIT $3 OFFSET $4`;
+      countQuery = `SELECT COUNT(*) FROM buyers
+                    WHERE company_id = $1
+                    AND (name ILIKE $2 OR gstin ILIKE $2 OR phone ILIKE $2 OR email ILIKE $2)`;
+      params     = [req.companyId, `%${search}%`, limit, offset];
+      countParams = [req.companyId, `%${search}%`];
+    } else {
+      query = 'SELECT * FROM buyers WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3';
+      countQuery = 'SELECT COUNT(*) FROM buyers WHERE company_id = $1';
+      params     = [req.companyId, limit, offset];
+      countParams = [req.companyId];
+    }
+
+    const result      = await pool.query(query, params);
+    const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
 
     res.json({
       data: result.rows,
       pagination: {
-        total,
-        page,
-        limit,
+        total, page, limit,
         totalPages: Math.ceil(total / limit),
         hasNext: offset + result.rows.length < total
       }

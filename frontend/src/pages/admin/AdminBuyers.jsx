@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, UserPlus, Phone, Building2, Search, RefreshCw, FileText } from 'lucide-react';
 import { fetchApi, API_BASE_URL } from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
@@ -29,12 +29,13 @@ const AdminBuyers = () => {
   const [editCreditBuyer, setEditCreditBuyer] = useState(null);
   const [newCreditLimit, setNewCreditLimit] = useState('');
 
-  const loadBuyers = useCallback(async (pageNum = 1) => {
+  const loadBuyers = useCallback(async (pageNum = 1, searchQuery = search) => {
     try {
       if (pageNum === 1) setLoading(true);
       else setLoadingMore(true);
 
-      const res = await fetchApi(`/buyers?page=${pageNum}&limit=20`);
+      const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
+      const res = await fetchApi(`/buyers?page=${pageNum}&limit=20${searchParam}`);
       const newBuyers = res?.data || [];
       
       if (pageNum === 1) {
@@ -53,9 +54,16 @@ const AdminBuyers = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [showToast]);
+  }, [search, showToast]);
 
   useEffect(() => { loadBuyers(1); }, [loadBuyers]);
+
+  // When search changes: reset page and reload from backend
+  useEffect(() => {
+    setPage(1);
+    loadBuyers(1, search);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;

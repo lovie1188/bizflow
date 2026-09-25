@@ -69,9 +69,10 @@ router.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     // L-6: Cap limit to prevent full-table dumps
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const limit  = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const companyId = req.query.companyId;
+    const search    = (req.query.search || '').trim();
 
     // Determine if caller is an authenticated admin (to allow buy_price)
     let isAuthenticatedAdmin = false;
@@ -87,22 +88,29 @@ router.get('/', async (req, res) => {
     // H-7: Strip internal cost field (buy_price) from public responses
     const publicFields = `id, company_id, sku, name, hsn_code, gst_rate, unit, trade_price,
       min_order_qty, image_url, brand, category, description, stock, created_at, updated_at`;
-    const adminFields = `*`;
+    const adminFields  = `*`;
     const selectFields = isAuthenticatedAdmin ? adminFields : publicFields;
 
-    let query = `SELECT ${selectFields} FROM products`;
-    let countQuery = 'SELECT COUNT(*) FROM products';
-    let params = [limit, offset];
-    let countParams = [];
+    // Build WHERE clause dynamically
+    const conditions = [];
+    const params = [limit, offset];
 
     if (companyId) {
-      query += ' WHERE company_id = $3';
-      countQuery += ' WHERE company_id = $1';
+      conditions.push(`company_id = $${params.length + 1}`);
       params.push(companyId);
-      countParams.push(companyId);
+    }
+    if (search) {
+      conditions.push(`(name ILIKE $${params.length + 1} OR sku ILIKE $${params.length + 1} OR brand ILIKE $${params.length + 1} OR category ILIKE $${params.length + 1})`);
+      params.push(`%${search}%`);
     }
 
-    query += ' ORDER BY created_at DESC LIMIT $1 OFFSET $2';
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Count query (without LIMIT/OFFSET)
+    const countParams = params.slice(2); // exclude limit and offset
+    const countQuery = `SELECT COUNT(*) FROM products ${whereClause.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n) - 2}`)}`;
+
+    const query = `SELECT ${selectFields} FROM products ${whereClause} ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
 
     const dataResult = await pool.query(query, params);
     const countResult = await pool.query(countQuery, countParams);

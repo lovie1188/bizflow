@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
       }
       // On network/server errors, keep session alive (don't log out for transient failures)
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   }, []);
 
   // ── Login ────────────────────────────────────────────────────

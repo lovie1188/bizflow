@@ -12,7 +12,8 @@ const AdminStaff = () => {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'staff' });
   const [editData, setEditData] = useState(null);
   
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]                     = useState(false);
+  const [confirmDeleteStaffId, setConfirmDeleteStaffId] = useState(null);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   
@@ -66,7 +67,8 @@ const AdminStaff = () => {
   };
 
   const handleDeleteStaff = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this staff member?')) return;
+    if (confirmDeleteStaffId !== id) { setConfirmDeleteStaffId(id); return; }
+    setConfirmDeleteStaffId(null);
     try {
       await fetchApi(`/users/staff/${id}`, { method: 'DELETE' });
       showToast('Staff removed successfully');
@@ -202,9 +204,16 @@ const AdminStaff = () => {
                 <button onClick={() => openEdit(s)} className="btn-secondary" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'8px' }}>
                   <Edit2 size={14}/> Edit
                 </button>
-                <button onClick={() => handleDeleteStaff(s.id)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'8px', background:'rgba(236,72,153,0.1)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.2)', borderRadius:'8px', cursor:'pointer', fontWeight:500 }}>
-                  <Trash2 size={14}/> Remove
-                </button>
+                {confirmDeleteStaffId === s.id ? (
+                  <div style={{ flex:1, display:'flex', gap:'4px', alignItems:'center' }}>
+                    <button onClick={() => handleDeleteStaff(s.id)} style={{ flex:1, padding:'7px 10px', background:'rgba(236,72,153,0.15)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:'8px', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:'12px' }}>Confirm Remove</button>
+                    <button onClick={() => setConfirmDeleteStaffId(null)} style={{ padding:'7px 10px', background:'rgba(255,255,255,0.05)', color:'var(--text-muted)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'8px', cursor:'pointer', fontFamily:'inherit', fontSize:'12px' }}>✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => handleDeleteStaff(s.id)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'8px', background:'rgba(236,72,153,0.1)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.2)', borderRadius:'8px', cursor:'pointer', fontWeight:500 }}>
+                    <Trash2 size={14}/> Remove
+                  </button>
+                )}
               </div>
             </div>
           ))}

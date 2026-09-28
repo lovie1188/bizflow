@@ -12,43 +12,49 @@ const validateRequest = (schema) => {
 };
 
 const productSchema = Joi.object({
-  sku: Joi.string().min(2).required(),
-  name: Joi.string().min(3).required(),
-  hsnCode: Joi.string().length(6).pattern(/^[0-9]+$/).required().messages({
-    'string.length': 'HSN Code must be exactly 6 digits',
+  sku:         Joi.string().min(2).required(),
+  name:        Joi.string().min(3).required(),
+  hsnCode:     Joi.string().length(6).pattern(/^[0-9]+$/).required().messages({
+    'string.length':       'HSN Code must be exactly 6 digits',
     'string.pattern.base': 'HSN Code must contain only digits'
   }),
-  gstRate: Joi.number().valid(0, 5, 12, 18, 28).required(),
-  unit: Joi.string().min(2).required(),
-  buyPrice: Joi.number().positive().required(),
-  tradePrice: Joi.number().positive().required(),
+  gstRate:     Joi.number().valid(0, 5, 12, 18, 28).required(),
+  unit:        Joi.string().min(2).required(),
+  buyPrice:    Joi.number().positive().required(),
+  tradePrice:  Joi.number().positive().required(),
   minOrderQty: Joi.number().integer().min(1).default(1),
-  imageUrl: Joi.string().uri().allow('', null)
+  imageUrl:    Joi.string().uri().allow('', null),
+  brand:       Joi.string().max(100).allow('', null),
+  description: Joi.string().max(1000).allow('', null),
+  category:    Joi.string().max(100).allow('', null),
+  stock:       Joi.number().integer().min(0).default(0),
 });
 
 const orderSchema = Joi.object({
-  buyerId: Joi.number().integer().required(),
+  buyerId:            Joi.number().integer().required(),
   items: Joi.array().items(
     Joi.object({
       productId: Joi.number().integer().required(),
-      qty: Joi.number().positive().required(),
+      qty:       Joi.number().positive().required(),
       unitPrice: Joi.number().positive().required(),
-      gstRate: Joi.number().valid(0, 5, 12, 18, 28).required(),
-      hsnCode: Joi.string().allow('', null),
-      name: Joi.string().allow('', null)
+      gstRate:   Joi.number().valid(0, 5, 12, 18, 28).required(),
+      hsnCode:   Joi.string().allow('', null),
+      name:      Joi.string().allow('', null)
     })
   ).min(1).required(),
-  dueDate: Joi.date().iso().required(),
-  deliveryAddress: Joi.string().allow('', null),
-  notes: Joi.string().allow('', null),
-  tcSignature: Joi.string().min(3).required(),
+  dueDate:              Joi.date().iso().required(),
+  deliveryAddress:      Joi.string().allow('', null),
+  notes:                Joi.string().allow('', null),
+  tcSignature:          Joi.string().min(3).required(),
   saveAddressToProfile: Joi.boolean().allow(null)
 });
 
 const invoiceSchema = Joi.object({
-  orderId: Joi.number().integer().required(),
-  amount: Joi.number().positive().required(),
-  dueDate: Joi.date().iso().required()
+  orderId:        Joi.number().integer().required(),
+  amount:         Joi.number().positive().required(),
+  dueDate:        Joi.date().iso().required(),
+  buyerEntityId:  Joi.number().integer().allow(null),
+  agreementType:  Joi.string().valid('msme', 'regular', 'credit').allow('', null),
 });
 
 const buyerSchema = Joi.object({

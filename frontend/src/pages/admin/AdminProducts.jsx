@@ -18,7 +18,8 @@ const AdminProducts = () => {
   const [form, setForm]           = useState(EMPTY_FORM);
   const [imgPreview, setImgPreview] = useState(null);
   const [imgFile, setImgFile] = useState(null);
-  const [loading, setLoading]     = useState(false);
+  const [loading, setLoading]         = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null); // inline confirm — no window.confirm
   const [page, setPage]           = useState(1);
   const [hasMore, setHasMore]     = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -71,13 +72,13 @@ const AdminProducts = () => {
     }
   };
 
-  useEffect(() => { loadProducts(1); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadProducts(1); }, []); // eslint-disable-line
 
   // When search changes: reset page and reload from backend
   useEffect(() => {
     setPage(1);
     loadProducts(1, search);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search]); // eslint-disable-line
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -138,7 +139,8 @@ const AdminProducts = () => {
   };
 
   const handleDelete = async (id) => { 
-    if(!window.confirm('Delete this product?')) return;
+    if (confirmDeleteId !== id) { setConfirmDeleteId(id); return; }
+    setConfirmDeleteId(null);
     try {
       await fetchApi(`/products/${id}`, { method:'DELETE' });
       showToast('Product deleted');
@@ -226,7 +228,14 @@ const AdminProducts = () => {
                 <td style={{ padding:'14px 16px' }}>
                   <div style={{ display:'flex', gap:'8px' }}>
                     <button onClick={() => openEdit(p)} style={{ background:'rgba(59,130,246,0.1)', border:'none', color:'var(--color-primary)', padding:'7px', borderRadius:'7px', cursor:'pointer' }}><Edit2 size={15}/></button>
-                    <button onClick={() => handleDelete(p.id)} style={{ background:'rgba(236,72,153,0.1)', border:'none', color:'var(--color-danger)', padding:'7px', borderRadius:'7px', cursor:'pointer' }}><Trash2 size={15}/></button>
+                    {confirmDeleteId === p.id ? (
+                      <div style={{ display:'flex', gap:'4px', alignItems:'center' }}>
+                        <button onClick={() => handleDelete(p.id)} style={{ padding:'5px 10px', borderRadius:'6px', background:'rgba(236,72,153,0.15)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.3)', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:'11px' }}>Confirm</button>
+                        <button onClick={() => setConfirmDeleteId(null)} style={{ padding:'5px 7px', borderRadius:'6px', background:'rgba(255,255,255,0.05)', color:'var(--text-muted)', border:'1px solid rgba(255,255,255,0.1)', cursor:'pointer', fontSize:'12px' }}>✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => handleDelete(p.id)} style={{ background:'rgba(236,72,153,0.1)', border:'none', color:'var(--color-danger)', padding:'7px', borderRadius:'7px', cursor:'pointer' }}><Trash2 size={15}/></button>
+                    )}
                   </div>
                 </td>
               </tr>

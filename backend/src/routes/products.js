@@ -71,33 +71,43 @@ router.get('/', async (req, res) => {
     // L-6: Cap limit to prevent full-table dumps
     const limit  = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
-    const companyId = req.query.companyId;
-    const search    = (req.query.search || '').trim();
+    // Public store passes companyId as query param; authenticated admin uses JWT
+    const queryCompanyId = req.query.companyId;
+    const search         = (req.query.search || '').trim();
 
-    // Determine if caller is an authenticated admin (to allow buy_price)
+    // Determine if caller is an authenticated user (to allow buy_price for admin)
     let isAuthenticatedAdmin = false;
+    let jwtCompanyId         = null;
     try {
       const jwt = require('jsonwebtoken');
       const authHeader = req.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
-        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        const decoded    = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
         isAuthenticatedAdmin = decoded?.role === 'admin';
+        jwtCompanyId         = decoded?.companyId || null;
       }
     } catch (_) { /* unauthenticated — fine for public catalog */ }
 
     // H-7: Strip internal cost field (buy_price) from public responses
+    // Note: updated_at excluded from publicFields — column added via migration on first boot
     const publicFields = `id, company_id, sku, name, hsn_code, gst_rate, unit, trade_price,
-      min_order_qty, image_url, brand, category, description, stock, created_at, updated_at`;
+      min_order_qty, image_url, brand, category, description, stock, created_at`;
     const adminFields  = `*`;
     const selectFields = isAuthenticatedAdmin ? adminFields : publicFields;
+
+    // Resolve effective company filter:
+    //  - Authenticated admin  → use JWT company_id (security: admin can only see own company)
+    //  - Public store request → use ?companyId= query param
+    //  - No filter at all     → unfiltered (future: multi-tenant dev dashboard)
+    const effectiveCompanyId = isAuthenticatedAdmin ? jwtCompanyId : (queryCompanyId || null);
 
     // Build WHERE clause dynamically
     const conditions = [];
     const params = [limit, offset];
 
-    if (companyId) {
+    if (effectiveCompanyId) {
       conditions.push(`company_id = $${params.length + 1}`);
-      params.push(companyId);
+      params.push(effectiveCompanyId);
     }
     if (search) {
       conditions.push(`(name ILIKE $${params.length + 1} OR sku ILIKE $${params.length + 1} OR brand ILIKE $${params.length + 1} OR category ILIKE $${params.length + 1})`);
@@ -106,29 +116,30 @@ router.get('/', async (req, res) => {
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Count query (without LIMIT/OFFSET)
+    // Count query (without LIMIT/OFFSET) — remap param indices by subtracting 2
     const countParams = params.slice(2); // exclude limit and offset
-    const countQuery = `SELECT COUNT(*) FROM products ${whereClause.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n) - 2}`)}`;
+    const countQuery  = `SELECT COUNT(*) FROM products ${whereClause.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n) - 2}`)}`;
 
     const query = `SELECT ${selectFields} FROM products ${whereClause} ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
 
-    const dataResult = await pool.query(query, params);
+    const dataResult  = await pool.query(query, params);
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
 
-    let brandsQuery = 'SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL';
-    let categoriesQuery = 'SELECT DISTINCT category FROM products WHERE category IS NOT NULL';
-    let brandsParams = [];
-    if (companyId) {
-      brandsQuery += ' AND company_id = $1';
+    // Return distinct brands and categories for the same company scope
+    let brandsQuery      = 'SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL';
+    let categoriesQuery  = 'SELECT DISTINCT category FROM products WHERE category IS NOT NULL';
+    let brandsParams     = [];
+    if (effectiveCompanyId) {
+      brandsQuery     += ' AND company_id = $1';
       categoriesQuery += ' AND company_id = $1';
-      brandsParams.push(companyId);
+      brandsParams.push(effectiveCompanyId);
     }
-    const brandsResult = await pool.query(brandsQuery, brandsParams);
-    const allBrands = brandsResult.rows.map(r => r.brand).sort();
+    const brandsResult     = await pool.query(brandsQuery, brandsParams);
+    const allBrands        = brandsResult.rows.map(r => r.brand).sort();
 
     const categoriesResult = await pool.query(categoriesQuery, brandsParams);
-    const allCategories = categoriesResult.rows.map(r => r.category).sort();
+    const allCategories    = categoriesResult.rows.map(r => r.category).sort();
 
     res.json({
       data: dataResult.rows,

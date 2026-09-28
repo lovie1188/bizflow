@@ -55,7 +55,7 @@ const AdminOrders = () => {
   useEffect(() => {
     setPage(1);
     loadOrders(1, search);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   }, [search]);
 
   const handleLoadMore = () => {

@@ -68,7 +68,8 @@ const DeveloperDashboard = () => {
 
   const [activeTab, setActiveTab]     = useState('backups');
   const [loading, setLoading]         = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [actionLoading, setActionLoading]     = useState(false);
+  const [restoreConfirmFile, setRestoreConfirmFile] = useState(null); // explicit confirm before destructive DB restore
   const [error, setError]             = useState('');
   const [message, setMessage]         = useState('');
 
@@ -219,7 +220,8 @@ const DeveloperDashboard = () => {
   };
 
   const handleRestore = async (file) => {
-    if (!window.confirm('⚠️ Restoring will overwrite the entire database. Are you sure?')) return;
+    if (restoreConfirmFile !== file) { setRestoreConfirmFile(file); return; }
+    setRestoreConfirmFile(null);
     try {
       setActionLoading(true); setError(''); setMessage('');
       const res  = await fetch(`${API_BASE}/developer/backups/restore`, {
@@ -347,9 +349,21 @@ const DeveloperDashboard = () => {
                           <td style={S.td}>{formatSize(b.size)}</td>
                           <td style={S.td}>{b.date ? new Date(b.date).toLocaleString() : '—'}</td>
                           <td style={{...S.td, textAlign:'right'}}>
-                            <button style={S.btnDanger} onClick={() => handleRestore(b.file || b.filename)}>
-                              <Download size={12}/> Restore
-                            </button>
+                            {restoreConfirmFile === (b.file || b.filename) ? (
+                              <div style={{ display:'flex', gap:'6px', justifyContent:'flex-end', alignItems:'center' }}>
+                                <span style={{ fontSize:'11px', color:'#f87171', whiteSpace:'nowrap' }}>⚠ Overwrites DB!</span>
+                                <button style={{...S.btnDanger, background:'rgba(239,68,68,0.3)', border:'1px solid rgba(239,68,68,0.6)'}} onClick={() => handleRestore(b.file || b.filename)}>
+                                  Confirm
+                                </button>
+                                <button style={{ padding:'4px 8px', background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'#9ca3af', borderRadius:'4px', cursor:'pointer', fontFamily:'inherit', fontSize:'11px' }} onClick={() => setRestoreConfirmFile(null)}>
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button style={S.btnDanger} onClick={() => handleRestore(b.file || b.filename)}>
+                                <Download size={12}/> Restore
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Download, CheckSquare, Clock, AlertTriangle, FilePlus, Scale, Volume2 } from 'lucide-react';
+import { Download, CheckSquare, Clock, AlertTriangle, FilePlus, Scale, Volume2, X } from 'lucide-react';
 import { fetchApi, API_BASE_URL } from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
 import { playVoiceAlert } from '../../utils/voiceNotifier';
 
 const AdminInvoices = () => {
   const showToast = useToast();
-  const [activeTab, setActiveTab] = useState('all');
-  const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab]       = useState('all');
+  const [invoices, setInvoices]         = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [confirmPaidId, setConfirmPaidId] = useState(null); // inline confirm instead of window.confirm
 
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage]               = useState(1);
+  const [hasMore, setHasMore]         = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const fetchInvoices = async (pageNum = 1) => {
@@ -65,14 +66,19 @@ const AdminInvoices = () => {
   };
 
   const handleMarkPaid = async (id) => {
-    if (window.confirm('Are you sure you want to mark this invoice as paid?')) {
-      try {
-        await fetchApi(`/invoices/${id}/mark-paid`, { method: 'POST' });
-        showToast('Invoice marked as paid successfully');
-        fetchInvoices(1);
-      } catch (e) {
-        showToast(e.message, 'error');
-      }
+    if (confirmPaidId !== id) {
+      // First click — show inline confirm row
+      setConfirmPaidId(id);
+      return;
+    }
+    // Second click — confirmed
+    setConfirmPaidId(null);
+    try {
+      await fetchApi(`/invoices/${id}/mark-paid`, { method: 'POST' });
+      showToast('Invoice marked as paid successfully');
+      fetchInvoices(1);
+    } catch (e) {
+      showToast(e.message, 'error');
     }
   };
 
@@ -191,7 +197,31 @@ const AdminInvoices = () => {
                         <Download size={16}/>
                       </button>
                       {inv.calculatedStatus !== 'paid' && (
-                        <button onClick={() => handleMarkPaid(inv.id)} style={{ background:'rgba(16,185,129,0.1)', border:'none', color:'#10B981', padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontFamily:'inherit', fontSize:'12px', fontWeight:500 }}>Mark Paid</button>
+                        confirmPaidId === inv.id ? (
+                          /* Inline confirm state */
+                          <div style={{ display:'flex', gap:'4px', alignItems:'center' }}>
+                            <span style={{ fontSize:'11px', color:'var(--text-muted)', whiteSpace:'nowrap' }}>Confirm?</span>
+                            <button
+                              onClick={() => handleMarkPaid(inv.id)}
+                              style={{ background:'rgba(16,185,129,0.15)', border:'1px solid rgba(16,185,129,0.4)', color:'#10B981', padding:'5px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'11px', fontWeight:600, fontFamily:'inherit' }}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmPaidId(null)}
+                              style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', color:'var(--text-muted)', padding:'5px', borderRadius:'6px', cursor:'pointer' }}
+                            >
+                              <X size={12}/>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleMarkPaid(inv.id)}
+                            style={{ background:'rgba(16,185,129,0.1)', border:'none', color:'#10B981', padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontFamily:'inherit', fontSize:'12px', fontWeight:500 }}
+                          >
+                            Mark Paid
+                          </button>
+                        )
                       )}
                       {inv.calculatedStatus === 'overdue' && inv.calculatedDays > 45 && (
                         <button 

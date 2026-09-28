@@ -416,16 +416,46 @@ const initDB = async () => {
 };
 
 // Initialize Database
-initDB();
+(async () => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 5000; // ms — gives Neon time to wake from cold-start
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await initDB();
+      break; // success
+    } catch (err) {
+      console.error(`DB init error (attempt ${attempt}/${MAX_RETRIES}):`, err.message);
+      if (attempt < MAX_RETRIES) {
+        console.log(`Retrying DB init in ${RETRY_DELAY / 1000}s…`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+      }
+    }
+  }
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await runMigrations();
+      break;
+    } catch (err) {
+      console.error(`Migration error (attempt ${attempt}/${MAX_RETRIES}):`, err.message);
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+      }
+    }
+  }
+})();
 
 // ============================================================
-// MIGRATIONS (safe, idempotent - add new columns to existing DBs)
+// MIGRATIONS (safe, idempotent — add new columns to existing DBs)
 // ============================================================
 const runMigrations = async () => {
   try {
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Other'`);
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(100)`);
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT`);
+    await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INT DEFAULT 0`);
+    await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
     
     // Add used_credit to buyers
     await pool.query(`ALTER TABLE buyers ADD COLUMN IF NOT EXISTS used_credit DECIMAL(12,2) DEFAULT 0`);

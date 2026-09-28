@@ -19,7 +19,8 @@ const AdminSettings = () => {
   // Bank Modal State
   const [showBankModal, setShowBankModal] = useState(false);
   const [newBank, setNewBank] = useState({ account_name: '', bank_name: '', account_no: '', ifsc: '', upi_id: '', owner_name: '', is_default: false });
-  const [addingBank, setAddingBank] = useState(false);
+  const [addingBank, setAddingBank]           = useState(false);
+  const [confirmDeleteBankId, setConfirmDeleteBankId] = useState(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -104,7 +105,8 @@ const AdminSettings = () => {
   };
 
   const handleDeleteBank = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this bank account?')) return;
+    if (confirmDeleteBankId !== id) { setConfirmDeleteBankId(id); return; }
+    setConfirmDeleteBankId(null);
     try {
       await fetchApi(`/companies/banks/${id}`, { method: 'DELETE' });
       setBanks(banks.filter(b => b.id !== id));
@@ -299,10 +301,17 @@ const AdminSettings = () => {
                       style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Copy Details">
                       {copied === b.id ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
                     </button>
-                    <button onClick={() => handleDeleteBank(b.id)} 
-                      style={{ background: 'rgba(236,72,153,0.1)', border: 'none', color: 'var(--color-danger)', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Delete Account">
-                      <Trash2 size={14} />
-                    </button>
+                    {confirmDeleteBankId === b.id ? (
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button onClick={() => handleDeleteBank(b.id)} style={{ padding: '5px 10px', borderRadius: '6px', background: 'rgba(236,72,153,0.15)', color: 'var(--color-danger)', border: '1px solid rgba(236,72,153,0.3)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '11px' }}>Del?</button>
+                        <button onClick={() => setConfirmDeleteBankId(null)} style={{ padding: '5px 7px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => handleDeleteBank(b.id)}
+                        style={{ background: 'rgba(236,72,153,0.1)', border: 'none', color: 'var(--color-danger)', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Delete Account">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

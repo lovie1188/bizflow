@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, UserPlus, Phone, Building2, Search, RefreshCw, FileText } from 'lucide-react';
 import { fetchApi, API_BASE_URL } from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
@@ -11,7 +11,8 @@ const AdminBuyers = () => {
   const [activeTab, setActiveTab]   = useState('all');
   const [search, setSearch]         = useState('');
   const [loading, setLoading]       = useState(true);
-  const [actionId, setActionId]     = useState(null);
+  const [actionId, setActionId]         = useState(null);
+  const [confirmRejectId, setConfirmRejectId] = useState(null); // inline confirm — no window.confirm
   const showToast = useToast();
 
   // Add new buyer state
@@ -62,7 +63,7 @@ const AdminBuyers = () => {
   useEffect(() => {
     setPage(1);
     loadBuyers(1, search);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   }, [search]);
 
   const handleLoadMore = () => {
@@ -94,9 +95,10 @@ const AdminBuyers = () => {
     setShowModal(true);
   };
 
-  // Quick reject (no modal needed)
+  // Quick reject — uses inline confirmRejectId state instead of window.confirm
   const handleReject = async (id) => {
-    if (!window.confirm('Reject this buyer?')) return;
+    if (confirmRejectId !== id) { setConfirmRejectId(id); return; }
+    setConfirmRejectId(null);
     setActionId(id);
     try {
       await fetchApi(`/buyers/${id}/approve`, {
@@ -309,10 +311,18 @@ const AdminBuyers = () => {
                         style={{ flex:1, padding:'8px', borderRadius:'8px', background:'rgba(16,185,129,0.15)', color:'#10B981', border:'1px solid rgba(16,185,129,0.3)', cursor:'pointer', fontFamily:'inherit', fontWeight:500, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', fontSize:'13px' }}>
                         <CheckCircle size={14}/> Approve
                       </button>
-                      <button onClick={() => handleReject(b.id)}
-                        style={{ flex:1, padding:'8px', borderRadius:'8px', background:'rgba(236,72,153,0.1)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.2)', cursor:'pointer', fontFamily:'inherit', fontWeight:500, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', fontSize:'13px' }}>
-                        <XCircle size={14}/> Reject
-                      </button>
+                      {confirmRejectId === b.id ? (
+                        <div style={{ flex:1, display:'flex', gap:'4px', alignItems:'center' }}>
+                          <span style={{ fontSize:'11px', color:'var(--color-danger)', whiteSpace:'nowrap', flex:1 }}>Confirm?</span>
+                          <button onClick={() => handleReject(b.id)} style={{ padding:'6px 10px', borderRadius:'6px', background:'rgba(236,72,153,0.15)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.3)', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:'12px' }}>Yes</button>
+                          <button onClick={() => setConfirmRejectId(null)} style={{ padding:'6px 8px', borderRadius:'6px', background:'rgba(255,255,255,0.05)', color:'var(--text-muted)', border:'1px solid rgba(255,255,255,0.1)', cursor:'pointer', fontFamily:'inherit', fontSize:'12px' }}>✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => handleReject(b.id)}
+                          style={{ flex:1, padding:'8px', borderRadius:'8px', background:'rgba(236,72,153,0.1)', color:'var(--color-danger)', border:'1px solid rgba(236,72,153,0.2)', cursor:'pointer', fontFamily:'inherit', fontWeight:500, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', fontSize:'13px' }}>
+                          <XCircle size={14}/> Reject
+                        </button>
+                      )}
                     </>
                   ) : (
                     <>

@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const pool = require('../utils/db');
 const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -27,9 +27,26 @@ router.get('/settings', verifyToken, requireRole('admin'), async (req, res) => {
 router.put('/settings', verifyToken, requireRole('admin'), async (req, res) => {
   const { 
     name, gstin, udyam_no, phone, email, address, city, state, pincode, invoice_prefix,
-    gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, custom_domain 
+    gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, custom_domain,
+    store_slug
   } = req.body;
-  
+
+  // Validate store_slug: lowercase letters, numbers, hyphens only, 3-50 chars
+  if (store_slug !== undefined && store_slug !== null && store_slug !== '') {
+    const slugRegex = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
+    if (!slugRegex.test(store_slug)) {
+      return res.status(400).json({ error: 'Store slug must be 3–50 characters: lowercase letters, numbers, and hyphens only (no leading/trailing hyphens).' });
+    }
+    // Check uniqueness (allow current company to keep its slug)
+    const conflict = await pool.query(
+      'SELECT id FROM companies WHERE LOWER(store_slug) = LOWER($1) AND id != $2',
+      [store_slug, req.companyId]
+    );
+    if (conflict.rows.length > 0) {
+      return res.status(409).json({ error: 'That store slug is already taken. Please choose another.' });
+    }
+  }
+
   try {
     const result = await pool.query(
       `UPDATE companies 
@@ -48,10 +65,12 @@ router.put('/settings', verifyToken, requireRole('admin'), async (req, res) => {
            eway_bill_threshold = COALESCE($13, eway_bill_threshold),
            msme_alert_days = COALESCE($14, msme_alert_days),
            custom_domain = COALESCE($15, custom_domain),
+           store_slug = COALESCE($16, store_slug),
            updated_at = NOW()
-       WHERE id = $16 RETURNING *`,
+       WHERE id = $17 RETURNING *`,
       [name, gstin, udyam_no, phone, email, address, city, state, pincode, invoice_prefix, 
-       gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, custom_domain, req.companyId]
+       gst_turnover, default_payment_terms, eway_bill_threshold, msme_alert_days, custom_domain,
+       store_slug || null, req.companyId]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });

@@ -6,6 +6,11 @@ import ErrorBoundary from './components/ErrorBoundary'; // L-5: global error bou
 import ShopLayout  from './components/layouts/ShopLayout';
 import AdminLayout from './components/layouts/AdminLayout';
 
+// Platform Pages — public, no auth required
+import PlatformLanding  from './pages/platform/PlatformLanding';
+import Marketplace      from './pages/platform/Marketplace';
+import SupplierRegister from './pages/platform/SupplierRegister';
+
 // Shop Pages
 import ShopHome             from './pages/shop/ShopHome';
 import ProductCatalog       from './pages/shop/ProductCatalog';
@@ -21,9 +26,6 @@ import BuyerProfile         from './pages/shop/BuyerProfile';
 import BuyerPurchaseOrders  from './pages/shop/BuyerPurchaseOrders';
 import ForgotPassword       from './pages/shop/ForgotPassword';
 import ResetPassword        from './pages/shop/ResetPassword';
-
-// Public Pages — no longer needed; ShopHome handles public mode via useParams
-// import PublicStore from './pages/public/PublicStore';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -45,6 +47,7 @@ import { AuthProvider }   from './context/AuthContext';
 import { ToastProvider }  from './context/ToastContext';
 import ProtectedRoute     from './components/ProtectedRoute';
 
+
 function App() {
   // Detect Custom Domain mapping (anything other than localhost or bizflow.in)
   const hostname = window.location.hostname;
@@ -58,29 +61,39 @@ function App() {
           <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
 
-              {/* Root → If Custom Domain, show their public store, else redirect to login */}
+              {/* ─── Root ───────────────────────────────────────────────────── */}
+              {/* Custom domain → show that supplier's store */}
+              {/* Platform domain → show BizFlow landing page */}
               {isCustomDomain ? (
                 <Route path="/" element={<ShopLayout />}>
                   <Route index element={<ShopHome />} />
                   <Route path="register" element={<BuyerRegister />} />
                 </Route>
               ) : (
-                <Route path="/" element={<Navigate to="/login" replace />} />
+                <Route path="/" element={<PlatformLanding />} />
               )}
-              
-              {/* Public Storefront — /store/:storeName — No auth required */}
-              {/* ShopHome auto-detects isPublic via useParams storeName */}
+
+              {/* ─── Platform Public Pages (no auth) ────────────────────────── */}
+              <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/supplier-register" element={<ShopLayout />}>
+                <Route index element={<SupplierRegister />} />
+              </Route>
+
+              {/* ─── Public Supplier Storefront — /store/:storeName ─────────── */}
+              {/* Full public browsing: homepage, catalog, product detail */}
               <Route path="/store/:storeName" element={<ShopLayout />}>
-                <Route index element={<ShopHome />} />
+                <Route index           element={<ShopHome />} />
+                <Route path="catalog"  element={<ProductCatalog />} />
+                <Route path="product/:id" element={<ProductDetail />} />
                 <Route path="register" element={<BuyerRegister />} />
               </Route>
 
-              {/* Standalone Buyer Register — accessible from Login page */}
+              {/* ─── Standalone Buyer Register ───────────────────────────────── */}
               <Route path="/buyer-register" element={<ShopLayout />}>
                 <Route index element={<BuyerRegister />} />
               </Route>
 
-              {/* ─── Forgot / Reset Password (public, no auth required) ─── */}
+              {/* ─── Forgot / Reset Password (public) ───────────────────────── */}
               <Route path="/forgot-password" element={<ShopLayout />}>
                 <Route index element={<ForgotPassword />} />
               </Route>
@@ -88,7 +101,7 @@ function App() {
                 <Route index element={<ResetPassword />} />
               </Route>
 
-              {/* ─── Login (publicOnly: logged-in users auto-redirected to their home) ─── */}
+              {/* ─── Login (publicOnly: logged-in users → their home) ────────── */}
               <Route
                 path="/login"
                 element={
@@ -100,7 +113,7 @@ function App() {
                 <Route index element={<Login />} />
               </Route>
 
-              {/* ─── Buyer Storefront (only buyer role) ─── */}
+              {/* ─── Buyer Storefront (buyer role only) ──────────────────────── */}
               <Route
                 path="/shop"
                 element={
@@ -109,19 +122,19 @@ function App() {
                   </ProtectedRoute>
                 }
               >
-                <Route index           element={<ShopHome />} />
-                <Route path="catalog"  element={<ProductCatalog />} />
-                <Route path="product/:id" element={<ProductDetail />} />
-                <Route path="cart"     element={<Cart />} />
-                <Route path="checkout" element={<Checkout />} />
-                <Route path="orders"   element={<BuyerOrders />} />
-                <Route path="orders/:id" element={<OrderDetails />} />
+                <Route index                element={<ShopHome />} />
+                <Route path="catalog"       element={<ProductCatalog />} />
+                <Route path="product/:id"   element={<ProductDetail />} />
+                <Route path="cart"          element={<Cart />} />
+                <Route path="checkout"      element={<Checkout />} />
+                <Route path="orders"        element={<BuyerOrders />} />
+                <Route path="orders/:id"    element={<OrderDetails />} />
                 <Route path="purchase-orders" element={<BuyerPurchaseOrders />} />
-                <Route path="invoices" element={<BuyerInvoices />} />
-                <Route path="profile"  element={<BuyerProfile />} />
+                <Route path="invoices"      element={<BuyerInvoices />} />
+                <Route path="profile"       element={<BuyerProfile />} />
               </Route>
 
-              {/* ─── Supplier / Admin (only admin, supplier roles) ─── */}
+              {/* ─── Supplier / Admin ────────────────────────────────────────── */}
               <Route
                 path="/admin"
                 element={
@@ -139,7 +152,7 @@ function App() {
                 <Route path="settings"   element={<AdminSettings />} />
               </Route>
 
-              {/* ─── Delivery Staff (admin, delivery, staff roles) ─── */}
+              {/* ─── Delivery Staff ──────────────────────────────────────────── */}
               <Route
                 path="/delivery"
                 element={
@@ -149,7 +162,7 @@ function App() {
                 }
               />
 
-              {/* ─── Developer (only developer role) ─── */}
+              {/* ─── Developer ───────────────────────────────────────────────── */}
               <Route
                 path="/developer"
                 element={
@@ -159,16 +172,17 @@ function App() {
                 }
               />
 
-              {/* Catch-all → login */}
-              <Route path="*" element={<Navigate to="/login" replace />} />
+              {/* Catch-all → landing page */}
+              <Route path="*" element={<Navigate to="/" replace />} />
 
             </Routes>
           </Router>
-        </ToastProvider>
-      </CartProvider>
-    </AuthProvider>
+          </ToastProvider>
+        </CartProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
 
 export default App;
+

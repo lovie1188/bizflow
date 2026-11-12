@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useParams } from 'react-router-dom';
 import {
   ShoppingCart, Search, User, Menu, X,
   FileText, LogOut, LayoutDashboard, ChevronDown,
@@ -11,15 +11,19 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import BottomNav from './BottomNav';
 import ToastContainer from '../ui/Toast';
+import { API_URL } from '../../utils/api';
 
 const ShopLayout = () => {
   const { cartItems } = useCart();
   const { isLoggedIn, user, logout, homeRoute } = useAuth();
   const location = useLocation();
+  const { storeName } = useParams();    // present only on /store/:storeName routes
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [searchVal, setSearchVal] = useState('');
+  // Public company name for tenant store context
+  const [publicStoreName, setPublicStoreName] = useState(null);
 
   // Scroll shadow
   useEffect(() => {
@@ -27,6 +31,16 @@ const ShopLayout = () => {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Fetch public company name when in /store/:storeName context
+  // This lets Logo show tenant branding (e.g. "Charu Marketing") instead of "BizFlow"
+  useEffect(() => {
+    if (!storeName) { setPublicStoreName(null); return; }
+    fetch(`${API_URL}/api/public/store/${encodeURIComponent(storeName)}`)
+      .then(r => r.json())
+      .then(data => { if (data.success) setPublicStoreName(data.company?.name || null); })
+      .catch(() => {});
+  }, [storeName]);
 
   // Close dropdowns on route change
   useEffect(() => {
@@ -58,7 +72,7 @@ const ShopLayout = () => {
             >
               {menuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
-            <Logo to="/shop" />
+            <Logo to="/shop" name={publicStoreName} />
           </div>
 
           {/* Centre: horizontal nav links (desktop) */}
@@ -229,7 +243,7 @@ const ShopLayout = () => {
             {/* Brand */}
             <div>
               <div style={{ marginBottom: '14px' }}>
-                <Logo to="/shop" style={{ filter: 'brightness(0) invert(1)' }} />
+              <Logo to="/shop" name={publicStoreName} style={{ filter: 'brightness(0) invert(1)' }} />
               </div>
               <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.875rem', lineHeight: 1.7, maxWidth: '280px', marginBottom: '16px' }}>
                 Premium B2B e-commerce for MSMEs. Wholesale ordering with automated GST invoicing and 15-day payment terms.

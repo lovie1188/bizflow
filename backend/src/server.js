@@ -490,7 +490,18 @@ const runMigrations = async () => {
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS default_payment_terms VARCHAR(100) DEFAULT '15 Days (No agreement)'`);
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS eway_bill_threshold VARCHAR(100) DEFAULT '₹50,000 (Mandatory)'`);
     await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS msme_alert_days VARCHAR(100) DEFAULT '45 Days — MSME Protected'`);
-    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS setup_complete BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS store_slug VARCHAR(100)`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS custom_domain VARCHAR(255)`);
+    // Auto-generate store_slug for companies that don't have one yet
+    // Slug = first word of name (lowercase, alphanumeric only), e.g. "Charu Marketing" → "charumkt"
+    await pool.query(`
+      UPDATE companies 
+      SET store_slug = CONCAT(
+        LOWER(REGEXP_REPLACE(SPLIT_PART(name, ' ', 1), '[^a-zA-Z0-9]', '', 'g')),
+        LOWER(COALESCE(SUBSTRING(REGEXP_REPLACE(SPLIT_PART(name, ' ', 2), '[^a-zA-Z0-9]', '', 'g') FROM 1 FOR 3), ''))
+      )
+      WHERE store_slug IS NULL OR store_slug = ''
+    `);
     await pool.query(`ALTER TABLE buyers   ADD COLUMN IF NOT EXISTS msme_no VARCHAR(100)`);
 
     // ── Forgot-password token table ─────────────────────────────────

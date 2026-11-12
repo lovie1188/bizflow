@@ -2,9 +2,17 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const Logo = ({ to = "/shop" }) => {
+/**
+ * Logo — branding-aware.
+ * Priority: explicit `name` prop → logged-in company name → platform default "BizFlow"
+ * The old fallback 'CHARU MKTG' was a SaaS branding bug: unauthenticated pages
+ * (login, forgot-password) showed a tenant name instead of the platform name.
+ */
+const Logo = ({ to = "/shop", name: nameProp }) => {
   const { company } = useAuth() || {};
-  const nameParts = (company?.name || 'CHARU MKTG').split(' ');
+  // Use prop > logged-in company name > platform name (never a tenant-specific fallback)
+  const displayName = nameProp || company?.name || 'BizFlow';
+  const nameParts = displayName.split(' ');
   const firstWord = nameParts[0];
   const restWords = nameParts.slice(1).join(' ');
 
